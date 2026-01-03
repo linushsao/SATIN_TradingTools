@@ -691,7 +691,7 @@ class BacktestWidget(QWidget):
         # --- B. 買賣訊號圖層 (基於 signal_series 變化) ---
         summary = self.last_result_data.get('performance_summary', {})
         signals = summary.get('signal_series', [])
-        
+        offset  = 20
         if signals:
             signal_group = pg.ItemGroup() # 使用群組管理所有箭頭
             for i in range(len(signals)):
@@ -703,21 +703,21 @@ class BacktestWidget(QWidget):
                 if curr_sig == prev_sig:
                     continue
                 
-                # 判定進場點與繪製三角形 (修正: 移除無效參數 tipLen)
-                if curr_sig == 1: # 多單進場 (0 -> 1 或 -1 -> 1)
+                # 判定進場點與繪製三角形 (依要求調整位置：多:High, 空:Low)
+                if curr_sig == 1: # 多單進場
                     arrow = pg.ArrowItem(
-                        pos=(i, fd['Low'][i]),
-                        angle=-90,
-                        brush='#3498db', # 藍色向上
-                        headLen=10
+                        pos=(i, fd['High'][i]+offset), # 標示於最高點
+                        angle=90,             # 向上箭頭
+                        brush='#e74c3c',       # 
+                        headLen=20
                     )
                     signal_group.addItem(arrow)
-                elif curr_sig == -1: # 空單進場 (0 -> -1 或 1 -> -1)
+                elif curr_sig == -1: # 空單進場
                     arrow = pg.ArrowItem(
-                        pos=(i, fd['High'][i]),
-                        angle=90,
-                        brush='#e74c3c', # 紅色向下
-                        headLen=10
+                        pos=(i, fd['Low'][i]-offset),  # 標示於最低點
+                        angle=-90,              # 向下箭頭
+                        brush='#3498db',       # 
+                        headLen=20
                     )
                     signal_group.addItem(arrow)
             
