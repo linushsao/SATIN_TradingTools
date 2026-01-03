@@ -709,25 +709,43 @@ class BacktestWidget(QWidget):
             self.chart_layers["買賣訊號"] = signal_group
             signal_group.setVisible(self.layer_visibility_states.get("買賣訊號", True))
 
-        # --- C.動態指標圖層 (基於 view.py 產出的 indicators) ---
-        # 預期數據結構: data['indicators'] = [{'name': 'MA5', 'data': [...], 'color': '#fff'}, ...]
+        # --- C. 動態指標圖層 (基於 view.py 產出的 indicators) ---
         indicators = self.last_result_data.get('indicators', [])
-        # layout.py 修正後的程式碼
+        
+        style_map = {
+            '--': Qt.PenStyle.DashLine,
+            ':':  Qt.PenStyle.DotLine,
+            '-.': Qt.PenStyle.DashDotLine,
+            '-':  Qt.PenStyle.SolidLine
+        }
+
         for ind in indicators:
-            name = ind.get('name', 'Unknown')
             data = ind.get('data', [])
-            
-            # 使用 len() 檢查，不論是 List 或 NumPy Array 都能安全判定是否為空
             if data is None or len(data) == 0: 
                 continue
             
+            # --- [關鍵修正]: 從 kwargs 提取屬性 ---
+            kwargs = ind.get('kwargs', {})
+            
+            # 優先使用 kwargs 內的 label 作為圖層名稱
+            name = ind.get('name') or kwargs.get('label') or 'Unknown'
+            
+            # 提取顏色與寬度，優先從 kwargs 找
+            color = kwargs.get('color') or ind.get('color', '#ffffff')
+            width = kwargs.get('width') or ind.get('width', 1.5)
+            
+            # 處理線條類型
+            raw_style = kwargs.get('linestyle') or kwargs.get('style') or ind.get('linestyle') or ind.get('style', '-')
+            pen_style = style_map.get(raw_style, Qt.PenStyle.SolidLine)
+            
+            # 渲染線條
             line = self.pw_kline.plot(
                 data, 
-                pen=pg.mkPen(color=ind.get('color', '#ffffff'), width=ind.get('width', 1.5)),
+                pen=pg.mkPen(color=color, width=width, style=pen_style),
                 name=name
             )
+            
             self.chart_layers[name] = line
-            # 若狀態字典中尚無此指標紀錄，預設為顯示
             line.setVisible(self.layer_visibility_states.get(name, True))
 
         # --- D. 績效圖層 (拆分繪製至獨立視窗) ---
