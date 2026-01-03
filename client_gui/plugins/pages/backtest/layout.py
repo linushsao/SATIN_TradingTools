@@ -663,9 +663,7 @@ class BacktestWidget(QWidget):
                 d_pad = (d_max - d_min) * 0.1 if d_max > d_min else 0.02
                 self.pw_mdd.setYRange(d_min - d_pad, d_max + d_pad, padding=0)
                 
-    # refresh_chart 函式 ---
     def refresh_chart(self):
-        """實作 K 線、訊號與動態指標渲染，並將其全面圖層化"""
         if not self.last_result_data: return
         
         self.pw_kline.clear()
@@ -680,34 +678,48 @@ class BacktestWidget(QWidget):
         # A1. K棒
         if all(k in fd for k in ['Open', 'High', 'Low', 'Close']):
             candles = np.column_stack((np.arange(len(fd['Close'])), fd['Open'], fd['High'], fd['Low'], fd['Close']))
-            candle_item = CandlestickItem(candles) # <--- 現在會調用上面新定義的類別
+            candle_item = CandlestickItem(candles)
             self.pw_kline.addItem(candle_item)
             self.chart_layers["K棒"] = candle_item
             candle_item.setVisible(self.layer_visibility_states.get("K棒", True))
-            
+        
         # A2. 價位線 (預設隱藏)
         price_line = self.pw_kline.plot(fd['Close'], pen=pg.mkPen(color='#3498db', width=1))
         self.chart_layers["價位線"] = price_line
         price_line.setVisible(self.layer_visibility_states.get("價位線", False))
 
-        # --- B. 買賣訊號圖層 (基於 trades 數據) ---
+        # --- B. 買賣訊號圖層 (基於 signal_series 變化) ---
         summary = self.last_result_data.get('performance_summary', {})
-        trades = summary.get('trades', [])
-        if trades:
+        signals = summary.get('signal_series', [])
+        
+        if signals:
             signal_group = pg.ItemGroup() # 使用群組管理所有箭頭
-            for t in trades:
-                idx = t.get('entry_idx')
-                if idx is None: continue
-                is_buy = 'buy' in t.get('entry_type', '').lower()
+            for i in range(len(signals)):
+                # 取得前一根訊號，若為第一根則視為 0 (平倉)
+                prev_sig = signals[i-1] if i > 0 else 0
+                curr_sig = signals[i]
                 
-                # 建立箭頭：買入(藍色向上)，賣出(紅色向下)
-                arrow = pg.ArrowItem(
-                    pos=(idx, fd['Low'][idx] if is_buy else fd['High'][idx]),
-                    angle=-90 if is_buy else 90,
-                    brush=('#3498db' if is_buy else '#e74c3c'),
-                    headLen=10, tipLen=5
-                )
-                signal_group.addItem(arrow)
+                # 訊號未跳變則跳過，僅在進場點標示
+                if curr_sig == prev_sig:
+                    continue
+                
+                # 判定進場點與繪製三角形 (修正: 移除無效參數 tipLen)
+                if curr_sig == 1: # 多單進場 (0 -> 1 或 -1 -> 1)
+                    arrow = pg.ArrowItem(
+                        pos=(i, fd['Low'][i]),
+                        angle=-90,
+                        brush='#3498db', # 藍色向上
+                        headLen=10
+                    )
+                    signal_group.addItem(arrow)
+                elif curr_sig == -1: # 空單進場 (0 -> -1 或 1 -> -1)
+                    arrow = pg.ArrowItem(
+                        pos=(i, fd['High'][i]),
+                        angle=90,
+                        brush='#e74c3c', # 紅色向下
+                        headLen=10
+                    )
+                    signal_group.addItem(arrow)
             
             self.pw_kline.addItem(signal_group)
             self.chart_layers["買賣訊號"] = signal_group
@@ -718,9 +730,9 @@ class BacktestWidget(QWidget):
         
         style_map = {
             '--': Qt.PenStyle.DashLine,
-            ':':  Qt.PenStyle.DotLine,
+            ':': Qt.PenStyle.DotLine,
             '-.': Qt.PenStyle.DashDotLine,
-            '-':  Qt.PenStyle.SolidLine
+            '-': Qt.PenStyle.SolidLine
         }
 
         for ind in indicators:
@@ -728,21 +740,14 @@ class BacktestWidget(QWidget):
             if data is None or len(data) == 0: 
                 continue
             
-            # --- [關鍵修正]: 從 kwargs 提取屬性 ---
             kwargs = ind.get('kwargs', {})
-            
-            # 優先使用 kwargs 內的 label 作為圖層名稱
             name = ind.get('name') or kwargs.get('label') or 'Unknown'
-            
-            # 提取顏色與寬度，優先從 kwargs 找
             color = kwargs.get('color') or ind.get('color', '#ffffff')
             width = kwargs.get('width') or ind.get('width', 1.5)
             
-            # 處理線條類型
             raw_style = kwargs.get('linestyle') or kwargs.get('style') or ind.get('linestyle') or ind.get('style', '-')
             pen_style = style_map.get(raw_style, Qt.PenStyle.SolidLine)
             
-            # 渲染線條
             line = self.pw_kline.plot(
                 data, 
                 pen=pg.mkPen(color=color, width=width, style=pen_style),
@@ -759,7 +764,7 @@ class BacktestWidget(QWidget):
             self.pw_equity.plot(equity, pen=pg.mkPen(color='#f1c40f', width=2))
         if dd: 
             self.pw_mdd.plot(dd, pen=pg.mkPen(color='#e74c3c', width=1, style=Qt.PenStyle.DashLine))
-            
+        
         self.pw_kline.autoRange()
         # 初始載入時先執行一次智慧範圍更新
         self.update_view_range(self.scrollbar.value())
