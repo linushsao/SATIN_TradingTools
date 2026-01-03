@@ -1,0 +1,29 @@
+Timestamp,Type,Source,Target,Category,Command,Message
+2026-01-03 06:51:45.039,REQ,Plugin(system_log),RepoService,REPO,REQ_GET_PROJECT_LIST,Args:{}
+2026-01-03 06:51:45.041,REP,RepoService,Plugin(system_log),REPO,REQ_GET_PROJECT_LIST,DataPayload
+2026-01-03 06:51:45.209,REQ,Plugin(backtest),TradingEngine,OHLCV,GET_CONTRACTS,Args:{}
+2026-01-03 06:51:45.211,REP,TradingEngine,Plugin(backtest),OHLCV,GET_CONTRACTS,DataPayload
+2026-01-03 06:51:49.528,REQ,Plugin(live_trading),TradingEngine,TRADE,GET_ACCOUNTS,Args:{}
+2026-01-03 06:51:49.530,REP,TradingEngine,Plugin(live_trading),TRADE,GET_ACCOUNTS,DataPayload
+2026-01-03 06:51:49.537,REQ,Plugin(live_trading),TradingEngine,OHLCV,GET_CONTRACTS,Args:{}
+2026-01-03 06:51:49.539,REP,TradingEngine,Plugin(live_trading),OHLCV,GET_CONTRACTS,DataPayload
+2026-01-03 06:51:49.543,REQ,Plugin(live_trading),TradingEngine,SYSTEM,SUBSCRIBE,Args:{'code': 'TMFR1'}
+2026-01-03 06:51:54.343,REP,TradingEngine,Plugin(live_trading),SYSTEM,SUBSCRIBE,OK
+2026-01-03 06:51:54.348,REQ,Plugin(live_trading),TradingEngine,STRATEGY,STR_STATUS,Args:{}
+2026-01-03 06:51:54.350,REP,TradingEngine,Plugin(live_trading),STRATEGY,STR_STATUS,DataPayload
+2026-01-03 06:51:58.712,REQ,Plugin(system_log),RepoService,REPO,REQ_GET_PROJECT_LIST,Args:{}
+2026-01-03 06:51:58.714,REP,RepoService,Plugin(system_log),REPO,REQ_GET_PROJECT_LIST,DataPayload
+2026-01-03 06:51:58.717,REQ,Plugin(system_log),TradingEngine,STRATEGY,STR_STATUS,Args:{}
+2026-01-03 06:51:58.719,REP,TradingEngine,Plugin(system_log),STRATEGY,STR_STATUS,DataPayload
+2026-01-03 06:52:02.899,REQ,Plugin(system_log),RepoService,REPO,REQ_GET_PROJECT_LIST,Args:{}
+2026-01-03 06:52:02.902,REP,RepoService,Plugin(system_log),REPO,REQ_GET_PROJECT_LIST,DataPayload
+2026-01-03 06:52:03.028,REQ,Plugin(system_log),RepoService,REPO,REQ_GET_PROJECT_LIST,Args:{}
+2026-01-03 06:52:03.030,REP,RepoService,Plugin(system_log),REPO,REQ_GET_PROJECT_LIST,DataPayload
+2026-01-03 06:52:03.035,REQ,Plugin(system_log),TradingEngine,STRATEGY,STR_STATUS,Args:{}
+2026-01-03 06:52:03.037,REP,TradingEngine,Plugin(system_log),STRATEGY,STR_STATUS,DataPayload
+2026-01-03 06:52:03.821,REQ,Plugin(system_log),RepoService,REPO,REQ_GET_PROJECT_LIST,Args:{}
+2026-01-03 06:52:03.824,REP,RepoService,Plugin(system_log),REPO,REQ_GET_PROJECT_LIST,DataPayload
+2026-01-03 06:52:03.828,REQ,Plugin(system_log),TradingEngine,STRATEGY,STR_STATUS,Args:{}
+2026-01-03 06:52:03.830,REP,TradingEngine,Plugin(system_log),STRATEGY,STR_STATUS,DataPayload
+2026-01-03 06:52:04.520,REQ,Plugin(backtest),TradingEngine,OHLCV,GET_CONTRACTS,Args:{}
+2026-01-03 06:52:04.522,REP,TradingEngine,Plugin(backtest),OHLCV,GET_CONTRACTS,DataPayload

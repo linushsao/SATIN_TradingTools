@@ -1,0 +1,50 @@
+Timestamp,Type,Source,Target,Category,Command,Message
+2026-01-01 21:45:03.052,REQ,Plugin(system_log),RepoService,REPO,REQ_GET_PROJECT_LIST,Args:{}
+2026-01-01 21:45:03.054,REP,RepoService,Plugin(system_log),REPO,REQ_GET_PROJECT_LIST,DataPayload
+2026-01-01 21:45:03.178,REQ,Plugin(backtest),TradingEngine,OHLCV,GET_CONTRACTS,Args:{}
+2026-01-01 21:45:03.179,REP,TradingEngine,Plugin(backtest),OHLCV,GET_CONTRACTS,DataPayload
+2026-01-01 21:45:04.092,REQ,Plugin(live_trading),TradingEngine,TRADE,GET_ACCOUNTS,Args:{}
+2026-01-01 21:45:04.094,REP,TradingEngine,Plugin(live_trading),TRADE,GET_ACCOUNTS,DataPayload
+2026-01-01 21:45:04.098,REQ,Plugin(live_trading),TradingEngine,OHLCV,GET_CONTRACTS,Args:{}
+2026-01-01 21:45:04.100,REP,TradingEngine,Plugin(live_trading),OHLCV,GET_CONTRACTS,DataPayload
+2026-01-01 21:45:04.104,REQ,Plugin(live_trading),TradingEngine,SYSTEM,SUBSCRIBE,Args:{'code': 'TMFR1'}
+2026-01-01 21:45:08.429,REP,TradingEngine,Plugin(live_trading),SYSTEM,SUBSCRIBE,OK
+2026-01-01 21:45:08.434,REQ,Plugin(live_trading),TradingEngine,STRATEGY,STR_STATUS,Args:{}
+2026-01-01 21:45:08.435,REP,TradingEngine,Plugin(live_trading),STRATEGY,STR_STATUS,DataPayload
+2026-01-01 21:45:12.735,REQ,Plugin(system_log),RepoService,REPO,REQ_GET_PROJECT_LIST,Args:{}
+2026-01-01 21:45:12.737,REP,RepoService,Plugin(system_log),REPO,REQ_GET_PROJECT_LIST,DataPayload
+2026-01-01 21:45:12.871,REQ,Plugin(system_log),RepoService,REPO,REQ_GET_PROJECT_LIST,Args:{}
+2026-01-01 21:45:12.874,REP,RepoService,Plugin(system_log),REPO,REQ_GET_PROJECT_LIST,DataPayload
+2026-01-01 21:45:12.881,REQ,Plugin(system_log),TradingEngine,STRATEGY,STR_STATUS,Args:{}
+2026-01-01 21:45:12.882,REP,TradingEngine,Plugin(system_log),STRATEGY,STR_STATUS,DataPayload
+2026-01-01 21:45:13.201,REQ,Plugin(system_log),RepoService,REPO,REQ_GET_PROJECT_LIST,Args:{}
+2026-01-01 21:45:13.203,REP,RepoService,Plugin(system_log),REPO,REQ_GET_PROJECT_LIST,DataPayload
+2026-01-01 21:45:13.206,REQ,Plugin(system_log),TradingEngine,STRATEGY,STR_STATUS,Args:{}
+2026-01-01 21:45:13.208,REP,TradingEngine,Plugin(system_log),STRATEGY,STR_STATUS,DataPayload
+2026-01-01 21:45:14.520,REQ,Plugin(backtest),TradingEngine,OHLCV,GET_CONTRACTS,Args:{}
+2026-01-01 21:45:14.523,REP,TradingEngine,Plugin(backtest),OHLCV,GET_CONTRACTS,DataPayload
+2026-01-01 21:45:21.706,REQ,Plugin(backtest),TradingEngine,OHLCV,GET_CONTRACTS,Args:{}
+2026-01-01 21:45:21.710,REP,TradingEngine,Plugin(backtest),OHLCV,GET_CONTRACTS,DataPayload
+2026-01-01 21:45:21.736,REQ,ClientSystem,TradingEngine,OHLCV,GET_DB_HISTORY,Args:{'code': 'TXFR1'; 'start': '2025-10-01'; 'end': '2025-10-31'; 'freq': 1}
+2026-01-01 21:45:21.738,REQ,Plugin(backtest),TradingEngine,OHLCV,GET_CONTRACTS,Args:{}
+2026-01-01 21:45:21.738,ERR,TradingEngine,Plugin(backtest),OHLCV,GET_CONTRACTS,Operation cannot be accomplished in current state
+2026-01-01 21:45:21.738,EXC,TradingEngine,Plugin(backtest),OHLCV,GET_CONTRACTS,Operation cannot be accomplished in current state
+2026-01-01 21:45:22.348,REP,TradingEngine,ClientSystem,OHLCV,GET_DB_HISTORY,DataPayload
+2026-01-01 21:45:22.387,REQ,ClientSystem,TradingEngine,OHLCV,GET_DB_HISTORY,Args:{'code': 'TXFR1'; 'start': '2025-11-01'; 'end': '2025-12-01'; 'freq': 1}
+2026-01-01 21:45:22.394,REQ,Plugin(backtest),TradingEngine,OHLCV,GET_CONTRACTS,Args:{}
+2026-01-01 21:45:22.395,ERR,TradingEngine,Plugin(backtest),OHLCV,GET_CONTRACTS,Operation cannot be accomplished in current state
+2026-01-01 21:45:22.395,EXC,TradingEngine,Plugin(backtest),OHLCV,GET_CONTRACTS,Operation cannot be accomplished in current state
+2026-01-01 21:45:23.229,REP,TradingEngine,ClientSystem,OHLCV,GET_DB_HISTORY,DataPayload
+2026-01-01 21:45:23.279,REQ,ClientSystem,TradingEngine,OHLCV,GET_DB_HISTORY,Args:{'code': 'TXFR1'; 'start': '2025-12-02'; 'end': '2026-01-01'; 'freq': 1}
+2026-01-01 21:45:23.284,REQ,Plugin(backtest),TradingEngine,OHLCV,GET_CONTRACTS,Args:{}
+2026-01-01 21:45:23.284,ERR,TradingEngine,Plugin(backtest),OHLCV,GET_CONTRACTS,Operation cannot be accomplished in current state
+2026-01-01 21:45:23.284,EXC,TradingEngine,Plugin(backtest),OHLCV,GET_CONTRACTS,Operation cannot be accomplished in current state
+2026-01-01 21:45:24.102,REP,TradingEngine,ClientSystem,OHLCV,GET_DB_HISTORY,DataPayload
+2026-01-01 21:45:24.182,REQ,Plugin(backtest),TradingEngine,OHLCV,GET_CONTRACTS,Args:{}
+2026-01-01 21:45:24.192,REP,TradingEngine,Plugin(backtest),OHLCV,GET_CONTRACTS,DataPayload
+2026-01-01 21:45:24.441,REQ,Plugin(backtest),TradingEngine,OHLCV,GET_CONTRACTS,Args:{}
+2026-01-01 21:45:24.489,REP,TradingEngine,Plugin(backtest),OHLCV,GET_CONTRACTS,DataPayload
+2026-01-01 21:45:24.827,REQ,Plugin(backtest),TradingEngine,OHLCV,GET_CONTRACTS,Args:{}
+2026-01-01 21:45:24.829,REP,TradingEngine,Plugin(backtest),OHLCV,GET_CONTRACTS,DataPayload
+2026-01-01 21:45:24.834,REQ,Plugin(backtest),TradingEngine,OHLCV,GET_CONTRACTS,Args:{}
+2026-01-01 21:45:24.835,REP,TradingEngine,Plugin(backtest),OHLCV,GET_CONTRACTS,DataPayload

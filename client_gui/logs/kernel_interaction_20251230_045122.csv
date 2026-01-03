@@ -1,0 +1,18 @@
+Timestamp,Type,Source,Target,Category,Command,Message
+2025-12-30 04:51:24.473,REQ,Plugin(system_log),RepoService,REPO,REQ_GET_PROJECT_LIST,Args:{}
+2025-12-30 04:51:24.475,REP,RepoService,Plugin(system_log),REPO,REQ_GET_PROJECT_LIST,DataPayload
+2025-12-30 04:51:24.587,REQ,Plugin(backtest),BacktestService,REPO,BT_GET_PROJECTS,Args:{}
+2025-12-30 04:51:24.589,ERR,BacktestService,Plugin(backtest),REPO,BT_GET_PROJECTS,Failed to get projects: name 'project_manager' is not defined
+2025-12-30 04:51:24.589,EXC,BacktestService,Plugin(backtest),REPO,BT_GET_PROJECTS,Failed to get projects: name 'project_manager' is not defined
+2025-12-30 04:51:25.325,REQ,Plugin(live_trading),TradingEngine,TRADE,GET_ACCOUNTS,Args:{}
+2025-12-30 04:51:25.329,REP,TradingEngine,Plugin(live_trading),TRADE,GET_ACCOUNTS,DataPayload
+2025-12-30 04:51:25.334,REQ,Plugin(live_trading),TradingEngine,OHLCV,GET_CONTRACTS,Args:{}
+2025-12-30 04:51:25.335,REP,TradingEngine,Plugin(live_trading),OHLCV,GET_CONTRACTS,DataPayload
+2025-12-30 04:51:25.340,REQ,Plugin(live_trading),TradingEngine,SYSTEM,SUBSCRIBE,Args:{'code': 'TMFR1'}
+2025-12-30 04:51:29.142,REP,TradingEngine,Plugin(live_trading),SYSTEM,SUBSCRIBE,OK
+2025-12-30 04:51:29.147,REQ,Plugin(live_trading),TradingEngine,STRATEGY,STR_STATUS,Args:{}
+2025-12-30 04:51:29.149,REP,TradingEngine,Plugin(live_trading),STRATEGY,STR_STATUS,DataPayload
+2025-12-30 04:51:33.138,REQ,Plugin(system_log),RepoService,REPO,REQ_GET_PROJECT_LIST,Args:{}
+2025-12-30 04:51:33.140,REP,RepoService,Plugin(system_log),REPO,REQ_GET_PROJECT_LIST,DataPayload
+2025-12-30 04:51:33.142,REQ,Plugin(system_log),TradingEngine,STRATEGY,STR_STATUS,Args:{}
+2025-12-30 04:51:33.144,REP,TradingEngine,Plugin(system_log),STRATEGY,STR_STATUS,DataPayload

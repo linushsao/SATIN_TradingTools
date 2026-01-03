@@ -1,0 +1,14 @@
+Timestamp,Type,Source,Target,Category,Command,Message
+2025-12-30 04:38:41.301,REQ,Plugin(system_log),RepoService,REPO,REQ_GET_PROJECT_LIST,Args:{}
+2025-12-30 04:38:41.303,REP,RepoService,Plugin(system_log),REPO,REQ_GET_PROJECT_LIST,DataPayload
+2025-12-30 04:38:41.406,REQ,Plugin(backtest),BacktestService,REPO,BT_GET_PROJECTS,Args:{}
+2025-12-30 04:38:41.407,ERR,BacktestService,Plugin(backtest),REPO,BT_GET_PROJECTS,Failed to get projects: name 'self' is not defined
+2025-12-30 04:38:41.408,EXC,BacktestService,Plugin(backtest),REPO,BT_GET_PROJECTS,Failed to get projects: name 'self' is not defined
+2025-12-30 04:38:42.245,REQ,Plugin(live_trading),TradingEngine,TRADE,GET_ACCOUNTS,Args:{}
+2025-12-30 04:38:42.260,REP,TradingEngine,Plugin(live_trading),TRADE,GET_ACCOUNTS,DataPayload
+2025-12-30 04:38:42.265,REQ,Plugin(live_trading),TradingEngine,OHLCV,GET_CONTRACTS,Args:{}
+2025-12-30 04:38:42.267,REP,TradingEngine,Plugin(live_trading),OHLCV,GET_CONTRACTS,DataPayload
+2025-12-30 04:38:42.271,REQ,Plugin(live_trading),TradingEngine,SYSTEM,SUBSCRIBE,Args:{'code': 'TMFR1'}
+2025-12-30 04:38:46.063,REP,TradingEngine,Plugin(live_trading),SYSTEM,SUBSCRIBE,OK
+2025-12-30 04:38:46.070,REQ,Plugin(live_trading),TradingEngine,STRATEGY,STR_STATUS,Args:{}
+2025-12-30 04:38:46.071,REP,TradingEngine,Plugin(live_trading),STRATEGY,STR_STATUS,DataPayload

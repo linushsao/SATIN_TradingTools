@@ -1,0 +1,105 @@
+{
+    "api_key_path": ".config/api_key.txt",
+    "secret_key_path": ".config/secret_key.txt",
+    "db_path": "dbase/market_data.db",
+    "last_start_date": "2025-12-13",
+    "last_end_date": "2025-12-13",
+    "last_save_frequency": 15,
+    "debug_mode": true,
+    "ticks_save_enabled": false,
+    "system_ma_period": 20,
+    "min_display_bars": 1600,
+    "page_display_bars": 200,
+    "active_frequencies": [
+        1,
+        5,
+        15,
+        30,
+        60
+    ],
+    "user_role": "DEVELOPER",
+    "live_k_bar_plugins": [
+        "bollinger_bands.py"
+    ],
+    "live_independent_plots": [
+        "volume_plot.py",
+        "rsi_plot.py"
+    ],
+    "backtest_k_bar_plugins": [
+        "bt_cost_line.py",
+        "bt_strategy_ma.py"
+    ],
+    "backtest_independent_plots": [
+        "bt_equity.py",
+        "bt_mdd.py"
+    ],
+    "strategy_k_bar_plugins": [
+        "bollinger_bands.py",
+        "view.py"
+    ],
+    "strategy_independent_plots": [
+        "volume_plot.py"
+    ],
+    "last_strategy_source": null,
+    "last_strategy_path": null,
+    "last_futures_contract": "TMFR1",
+    "auto_login": true,
+    "last_login_mode": "2",
+    "logging": {
+        "max_bytes": 10485760,
+        "backup_count": 5,
+        "encoding": "utf-8"
+    },
+    "client_name": "SATE_GUI",
+    "user_data_root": "../AppData",
+    "active_profile_id": "local_dev",
+    "service_profiles": {
+        "local_dev": {
+            "name": "Local Development",
+            "services": [
+                {
+                    "name": "Primary Broker",
+                    "host": "127.0.0.1",
+                    "rep_port": 5557,
+                    "pub_port": 5556,
+                    "req_timeout_ms": 15000,
+                    "auto_connect": true
+                },
+                {
+                    "name": "Strategy Repo",
+                    "host": "127.0.0.1",
+                    "rep_port": 5560,
+                    "pub_port": 5561,
+                    "auto_connect": true
+                }
+            ]
+        }
+    },
+    "view_kbar_freq": 15,
+    "show_hud": true,
+    "show_crosshair": false,
+    "external_editor_path": "C:/Program Files/Notepad++/notepad++.exe",
+    "external_editor_args": "",
+    "strategies_excluded_files": [
+        "metadata.json"
+    ],
+    "enabled_plugins": [
+        "sate.core.syslog",
+        "sate.core.strategies",
+        "sate.core.backtest",
+        "sate.core.live"
+    ],
+    "plugin_dirs": {
+        "live_overlay": "plugins/analysis",
+        "live_independent": "plugins/indicators",
+        "backtest_overlay": "plugins/backtest",
+        "backtest_independent": "plugins/backtest_osc"
+    },
+    "strategy_preview_bars": 200,
+    "strategy_hidden_files": [
+        "metadata.json",
+        "schema_cache.json",
+        ".gitignore",
+        "internal.db"
+    ]
+}

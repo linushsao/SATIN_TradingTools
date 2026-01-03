@@ -1,0 +1,12 @@
+Timestamp,Type,Source,Target,Category,Command,Message
+2025-12-28 22:07:29.763,REQ,Plugin(system_log),RepoService,REPO,REQ_GET_PROJECT_LIST,Args:{}
+2025-12-28 22:07:29.869,REQ,Plugin(backtest),TradingEngine,OHLCV,GET_CONTRACTS,Args:{}
+2025-12-28 22:07:44.884,ERR,TradingEngine,Plugin(backtest),OHLCV,GET_CONTRACTS,Timeout
+2025-12-28 22:07:44.885,EXC,TradingEngine,Plugin(backtest),OHLCV,GET_CONTRACTS,Timeout calling TradingEngine.GET_CONTRACTS
+2025-12-28 22:07:45.822,REQ,Plugin(live_trading),TradingEngine,TRADE,GET_ACCOUNTS,Args:{}
+2025-12-28 22:08:00.848,ERR,TradingEngine,Plugin(live_trading),TRADE,GET_ACCOUNTS,Timeout
+2025-12-28 22:08:00.848,EXC,TradingEngine,Plugin(live_trading),TRADE,GET_ACCOUNTS,Timeout calling TradingEngine.GET_ACCOUNTS
+2025-12-28 22:08:00.854,REQ,Plugin(live_trading),TradingEngine,OHLCV,GET_CONTRACTS,Args:{}
+2025-12-28 22:08:15.867,ERR,TradingEngine,Plugin(live_trading),OHLCV,GET_CONTRACTS,Timeout
+2025-12-28 22:08:15.868,EXC,TradingEngine,Plugin(live_trading),OHLCV,GET_CONTRACTS,Timeout calling TradingEngine.GET_CONTRACTS
+2025-12-28 22:08:15.874,REQ,Plugin(live_trading),TradingEngine,SYSTEM,SUBSCRIBE,Args:{'code': 'TMFR1'}
