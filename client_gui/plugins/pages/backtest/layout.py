@@ -351,7 +351,11 @@ class BacktestWidget(QWidget):
         self.chart_splitter.addWidget(self.pw_kline)
         self.chart_splitter.addWidget(self.pw_equity)
         self.chart_splitter.addWidget(self.pw_mdd)
-
+        # 設定預設比例 (K線 60%, 其他均分 20%)
+        self.chart_splitter.setStretchFactor(0, 6) # Index 0: K線
+        self.chart_splitter.setStretchFactor(1, 2) # Index 1: 資產曲線
+        self.chart_splitter.setStretchFactor(2, 2) # Index 2: 最大回撤
+        
         # 設置滑鼠移動監聽代理
         self.proxy_kline = pg.SignalProxy(
             self.pw_kline.scene().sigMouseMoved, 
