@@ -76,9 +76,7 @@ class TimeAxisItem(pg.AxisItem):
         if time_labels:
             head = time_labels[:5]
             tail = time_labels[-5:]
-            print(f"[DEBUG Axis] Current Labels - Head: {head}, Tail: {tail}, Total: {len(time_labels)}")
         else:
-            print("[DEBUG Axis] Warning: parent_widget.time_labels is EMPTY or None")
             return super().tickStrings(values, scale, spacing)
 
         labels = []
@@ -714,10 +712,14 @@ class BacktestWidget(QWidget):
         # --- C.動態指標圖層 (基於 view.py 產出的 indicators) ---
         # 預期數據結構: data['indicators'] = [{'name': 'MA5', 'data': [...], 'color': '#fff'}, ...]
         indicators = self.last_result_data.get('indicators', [])
+        # layout.py 修正後的程式碼
         for ind in indicators:
             name = ind.get('name', 'Unknown')
             data = ind.get('data', [])
-            if not data: continue
+            
+            # 使用 len() 檢查，不論是 List 或 NumPy Array 都能安全判定是否為空
+            if data is None or len(data) == 0: 
+                continue
             
             line = self.pw_kline.plot(
                 data, 
@@ -775,13 +777,11 @@ class BacktestWidget(QWidget):
     def _on_import_cell_clicked(self, row, col):
         # --- 修正: 改為抓取索引 1 (ID 欄位)，並更新上方提示標籤 ---
         item = self.table_imports.item(row, 1) 
-        print(f"[DB] item:{item}")
         if item: 
             project_id = item.text()
             self.current_edit_id = project_id
             self.lbl_edit_id.setText(f"Editing Project: {project_id}")
             self.sig_import_selected.emit(project_id)
-            print(f"[DB] project_id:{project_id}")
 
     def show_parse_report_ui(self, task_id, content):
         dlg = ReportDialog(task_id, content, self)

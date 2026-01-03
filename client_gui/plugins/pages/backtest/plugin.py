@@ -350,17 +350,6 @@ class BacktestPlugin(ISateGuiPlugin):
             self.imported_projects[pid]['status'] = f"RUNNING ({val:.1f}%)"
             self.refresh_ui()
 
-    def _on_local_finished(self, pid, packet, file_path):
-        if pid in self.imported_projects:
-            proj = self.imported_projects[pid]
-            proj['status'] = "FINISHED"
-            proj['last_result_path'] = file_path # 暫存結果路徑供 Plot 使用
-            self.refresh_ui()
-            self.context.log("INFO", f"[Backtest] {pid} finished. Saved to {file_path}")
-            
-            # 自動顯示結果 (直接帶入運算產出的 packet)
-            self.widget.show_result(packet)
-
     def _on_local_error(self, pid, msg):
         if pid in self.imported_projects:
             self.imported_projects[pid]['status'] = "ERROR"
@@ -601,11 +590,52 @@ class BacktestPlugin(ISateGuiPlugin):
             print(f"[BacktestPlugin] Requesting results from server for {task_id}...")
             self.proxy.send_command("BT_GET_RESULT", {"task_id": task_id}) 
 
-    def on_manual_plot_request(self, project_id):
-        """載入結果時同時執行專案目錄下的 view.py 指標設定"""
+    def _inject_view_indicators(self, project_id, data):
+        """
+        [核心修正]: 將變數名稱改為 K_BAR_DATA 以匹配 view.py 的預期。
+        """
         proj_info = self.imported_projects.get(project_id)
-        if not proj_info: return
+        if not proj_info:
+            return data
+
+        proj_path = proj_info.get('path')
+        view_path = os.path.join(proj_path, "view.py")
+        data['indicators'] = [] 
+
+        if os.path.exists(view_path):
+            try:
+                # 建立 DataFrame 並將變數名稱設為 K_BAR_DATA
+                # 同時傳入 np 與 pd 供 view.py 內的計算使用
+                df_input = pd.DataFrame(data.get('full_data', {}))
+                
+                local_vars = {
+                    'K_BAR_DATA': df_input,    # <--- 關鍵修正：必須與 view.py 一致
+                    'ADDPLOT_CONFIG': [],
+                    'np': np,
+                    'pd': pd
+                }
+                
+                with open(view_path, 'r', encoding='utf-8') as f:
+                    exec(f.read(), {}, local_vars)
+                
+                # 提取 view.py 執行後的配置結果
+                data['indicators'] = local_vars.get('ADDPLOT_CONFIG', [])
+                self.context.log("INFO", f"[Backtest] 已成功從 {project_id}/view.py 注入 {len(data['indicators'])} 個指標。")
+            except Exception as ve:
+                self.context.log("ERROR", f"執行 view.py 失敗: {ve}")
+        
+        return data
+
+    def on_manual_plot_request(self, project_id):
+        """
+        [手動路徑]: 當使用者點擊 Plot 按鈕或雙擊列表時執行。
+        """
+        print(f"[DB] === 進入 on_manual_plot_request (Project: {project_id}) ===")
+        proj_info = self.imported_projects.get(project_id)
+        if not proj_info: 
+            return
             
+        # 查找最新的結果檔案
         file_path = proj_info.get('last_result_path')
         if not file_path or not os.path.exists(file_path):
             base_dir = ResultStorage.get_base_dir(proj_info.get('name', project_id))
@@ -613,32 +643,28 @@ class BacktestPlugin(ISateGuiPlugin):
             files = sorted(glob.glob(os.path.join(base_dir, "run_*.json")), reverse=True)
             if not files: return
             file_path = files[0]
-
+            
         try:
+            # 1. 載入原始詳細數據
             data = ResultStorage.load_detail(file_path)
             
-            # --- [新增]: 執行專案 view.py 並獲取指標配置 ---
-            proj_path = proj_info.get('path')
-            view_path = os.path.join(proj_path, "view.py")
-            data['indicators'] = [] # 初始化指標桶
+            # 2. 注入 view.py 的指標數據
+            data = self._inject_view_indicators(project_id, data)
 
-            if os.path.exists(view_path):
-                try:
-                    # 建立執行環境，模擬策略視覺化邏輯
-                    local_vars = {
-                        'data': pd.DataFrame(data.get('full_data', {})), # 傳入完整行情
-                        'ADDPLOT_CONFIG': []
-                    }
-                    with open(view_path, 'r', encoding='utf-8') as f:
-                        exec(f.read(), {}, local_vars)
-                    
-                    # 提取 view.py 中定義的 ADDPLOT_CONFIG
-                    # 預期格式: ADDPLOT_CONFIG.append({'name': 'MA', 'data': self.ma, 'color': 'yellow'})
-                    data['indicators'] = local_vars.get('ADDPLOT_CONFIG', [])
-                    self.context.log("INFO", f"[Backtest] Executed view.py from {project_id}, found {len(data['indicators'])} indicators.")
-                except Exception as ve:
-                    self.context.log("ERROR", f"Failed to execute view.py: {ve}")
-
+            # 3. 呼叫 UI 進行繪圖
             self.widget.show_result(data)
         except Exception as e:
             self.context.log("ERROR", f"載入結果失敗: {e}")
+
+    # --- 別忘了同步修改自動顯示路徑 ---
+    def _on_local_finished(self, pid, packet, file_path):
+        if pid in self.imported_projects:
+            proj = self.imported_projects[pid]
+            proj['status'] = "FINISHED"
+            proj['last_result_path'] = file_path
+            self.refresh_ui()
+            
+            # [自動路徑修正]: 回測完自動注入指標
+            packet = self._inject_view_indicators(pid, packet)
+            
+            self.widget.show_result(packet)          
