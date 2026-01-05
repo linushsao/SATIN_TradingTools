@@ -244,8 +244,6 @@ class BacktestPlugin(ISateGuiPlugin):
 
     # --- UI Logic ---
     def on_import_selected(self, project_id):
-        # info = self.imported_projects.get(project_id)
-        # if not info: return
         """[MOD] 讀取本地目錄下的 metadata.json 並填入 UI"""
         ws_path = self.context.get_workspace_path()
         meta_path = os.path.join(ws_path, project_id, "metadata.json")
@@ -428,8 +426,6 @@ class BacktestPlugin(ISateGuiPlugin):
         self.refresh_ui()
 
     def refresh_ui(self):
-        # project_list = list(self.imported_projects.values())
-        # self.widget.update_imports_table(project_list)
         """[MOD] 掃描使用者本地專案目錄並同步至記憶體"""        
         ws = self.context.get_workspace_path()
         local_list = []
@@ -442,12 +438,6 @@ class BacktestPlugin(ISateGuiPlugin):
                     try:
                         with open(m_path, 'r', encoding='utf-8') as f:
                             meta = json.load(f)
-                            # local_list.append({
-                                # 'id': d,
-                                # 'name': meta.get('name', d),
-                                # 'status': self.imported_projects.get(d, {}).get('status', 'Ready')
-                            # })
-                    # except: pass
                             
                             # [FIX] 獲取絕對路徑 (Data Schema 補完)
                             proj_path = os.path.abspath(os.path.join(ws, d))
@@ -663,7 +653,6 @@ class BacktestPlugin(ISateGuiPlugin):
         """
         [手動路徑]: 當使用者點擊 Plot 按鈕或雙擊列表時執行。
         """
-        print(f"[DB] === 進入 on_manual_plot_request (Project: {project_id}) ===")
         proj_info = self.imported_projects.get(project_id)
         if not proj_info: 
             return
@@ -679,7 +668,6 @@ class BacktestPlugin(ISateGuiPlugin):
             
         try:
             # 1. 載入原始詳細數據 : 恢復載入邏輯
-            from shared.backtest.storage import ResultStorage
             data = ResultStorage.load_detail(file_path)
             
             # 2. : 僅保留統合注入函式，移除不存在的 _inject_view_indicators
@@ -690,7 +678,6 @@ class BacktestPlugin(ISateGuiPlugin):
         except Exception as e:
             self.context.log("ERROR", f"載入結果失敗: {e}")
 
-    # --- 安插位置前一行程式碼 ---
     def _on_local_finished(self, pid, packet, file_path):
         if pid in self.imported_projects:
             proj = self.imported_projects[pid]
