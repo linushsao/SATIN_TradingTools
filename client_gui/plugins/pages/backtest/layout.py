@@ -23,7 +23,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QDate, pyqtSignal, QTimer
 from PyQt6.QtGui import QColor, QPainter, QPen, QBrush
 
-# --- [新增] 專用於 Backtest 的指標管理對話框 (安插在 BacktestWidget 之前) ---
+# ---  專用於 Backtest 的指標管理對話框 (安插在 BacktestWidget 之前) ---
 import shutil
 
 class BacktestIndicatorManager(QDialog):
@@ -78,7 +78,7 @@ class BacktestIndicatorManager(QDialog):
         ov_dir = os.path.join(self.app_data_dir, 'overlays')
         if os.path.exists(ov_dir):
             for f in sorted(os.listdir(ov_dir)):
-                # [修正]: 增加判斷式排除 self.fixed_item ("view.py")，避免重複顯示
+                # : 增加判斷式排除 self.fixed_item ("view.py")，避免重複顯示
                 if f.endswith('.py') and f != "strategy_core.py" and f != self.fixed_item:
                     item = QListWidgetItem(f)
                     item.setData(Qt.ItemDataRole.UserRole, {'name': f, 'fixed': False})
@@ -382,7 +382,7 @@ class BacktestWidget(QWidget):
         self.corner_layout = QHBoxLayout(self.corner_widget)
         self.corner_layout.setContentsMargins(0, 0, 5, 0)
 
-        # [新增]: 指標管理員按鈕
+        # : 指標管理員按鈕
         self.btn_indicators = QPushButton("📊 指標管理")
         self.btn_indicators.setFixedWidth(80)
         self.btn_indicators.setStyleSheet("QPushButton { border: none; background: transparent; color: #888888; } QPushButton:hover { color: #4ec9b0; }")

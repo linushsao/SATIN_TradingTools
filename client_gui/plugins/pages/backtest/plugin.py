@@ -4,7 +4,7 @@
 # Version: V3.4-004 (Data Sync & Schema Fix)
 # 更新日期: 2025-12-25
 # 1. refresh_ui 現在會完整同步磁碟專案至 self.imported_projects (修復按 <run> 無反應問題)。
-# 2. 新增 path 與 script 欄位，確保回測執行時 DependencyPacker 能正確定位。
+# 2.  path 與 script 欄位，確保回測執行時 DependencyPacker 能正確定位。
 # 3. 優化 UI 刷新時的運行狀態保留邏輯。
 # ==============================================================================
 
@@ -47,7 +47,7 @@ class LocalBacktestThread(QThread):
     sig_missing_data = pyqtSignal(str, str, str, str)
     
     def __init__(self, project_id, proj_info, context):
-        """[修正]: 增加傳入 context 以供 HistoryDownloader 調用服務"""
+        """: 增加傳入 context 以供 HistoryDownloader 調用服務"""
         super().__init__()
         self.project_id = project_id
         self.proj_info = proj_info
@@ -67,7 +67,7 @@ class LocalBacktestThread(QThread):
         return False
 
     def run(self):
-        """[修正]: 解決 save_run 參數錯誤並確保 full_data 正確寫入磁碟。"""
+        """: 解決 save_run 參數錯誤並確保 full_data 正確寫入磁碟。"""
         try:
             from shared.capabilities import CAP_HISTORICAL_DATA
             from shared.get_historydata.downloader import HistoryDownloader
@@ -121,19 +121,22 @@ class LocalBacktestThread(QThread):
             engine = UniversalBacktestEngine()
             result_bundle = engine.run_task(df, strat_mod, params)
             
-            # --- 5. 結果持久化 [修正]: 準備標準化數據並處理存檔 ---
+            # --- 5. 結果持久化 : 處理 Timestamp 序列化問題 ---
             from shared.backtest.storage import ResultStorage
             
-            # [修正]: 確保欄位名稱標準化 (Open, High, Low, Close, Volume)
             df_reset = df.reset_index()
             col_map = {df_reset.columns[0]: 'datetime_index'}
             for c in df_reset.columns:
                 if c.lower() in ['open', 'high', 'low', 'close', 'volume']:
                     col_map[c] = c.capitalize()
             df_reset.rename(columns=col_map, inplace=True)
+            
+            # [核心]: 將 Timestamp 轉換為字串，避免 JSON 序列化失敗
+            if 'datetime_index' in df_reset.columns:
+                df_reset['datetime_index'] = df_reset['datetime_index'].astype(str)
+                
             full_data_dict = df_reset.to_dict(orient='list')
 
-            # [修正]: 回歸原始參數簽章，移除不支援的 full_data 關鍵字
             packet, file_path = ResultStorage.save_run(
                 strategy_name=self.proj_info.get('name', self.project_id),
                 metadata=params,
@@ -144,7 +147,7 @@ class LocalBacktestThread(QThread):
             # 手動將價格數據注入記憶體中的 packet 供立即顯示
             packet['full_data'] = full_data_dict
 
-            # [修正]: 手動將 full_data 寫入實體 JSON 檔案，確保後續 Plot 讀取時資料完整
+            # : 手動將 full_data 寫入實體 JSON 檔案，確保後續 Plot 讀取時資料完整
             if file_path and os.path.exists(file_path):
                 try:
                     with open(file_path, 'r', encoding='utf-8') as f:
@@ -193,7 +196,7 @@ class BacktestPlugin(ISateGuiPlugin):
         self.widget.sig_import_selected.connect(self.on_import_selected)
         
         self.widget.sig_run_task.connect(self.on_run_task)
-        self.widget.sig_save_settings.connect(self.on_save_params) # [新增連線]
+        self.widget.sig_save_settings.connect(self.on_save_params) # [連線]
         self.widget.sig_stop_task.connect(self.on_stop_task)
         self.widget.sig_remove_import.connect(self.on_remove_import)
         self.widget.sig_download_result.connect(self.on_download_result)
@@ -240,7 +243,6 @@ class BacktestPlugin(ISateGuiPlugin):
             self.refresh_ui()
 
     # --- UI Logic ---
-    
     def on_import_selected(self, project_id):
         # info = self.imported_projects.get(project_id)
         # if not info: return
@@ -263,12 +265,6 @@ class BacktestPlugin(ISateGuiPlugin):
         
         # Fill Form
         self.widget.combo_strategy.clear()
-        # self.widget.combo_strategy.addItem(info.get('name', project_id))
-        # self.widget.combo_strategy.setCurrentIndex(0)
-        
-        # # Load stored params if any
-        # if 'params' in info:
-            # self.widget.set_params(info['params'])
         self.widget.combo_strategy.addItem(info.get('name', project_id)) # 僅供顯示
         
         # [MOD] Mapping fields from metadata.json
@@ -341,7 +337,7 @@ class BacktestPlugin(ISateGuiPlugin):
         worker.start()
 
     def _on_local_missing_data(self, pid, code, start, end):
-        """[新增]: 向微核心請求下載並更新 UI 狀態"""
+        """: 向微核心請求下載並更新 UI 狀態"""
         from shared.capabilities import CAP_HISTORICAL_DATA
         
         try:
@@ -434,7 +430,6 @@ class BacktestPlugin(ISateGuiPlugin):
     def refresh_ui(self):
         # project_list = list(self.imported_projects.values())
         # self.widget.update_imports_table(project_list)
-        """[MOD] 掃描使用者本地專案目錄"""
         """[MOD] 掃描使用者本地專案目錄並同步至記憶體"""        
         ws = self.context.get_workspace_path()
         local_list = []
@@ -540,7 +535,7 @@ class BacktestPlugin(ISateGuiPlugin):
                 # 調用代理層獲取資料
                 data = bt_svc.get_result(task_id)
                 
-                # [新增]: 檢查回傳資料是否為有效字典，避免 NoneType.get() 錯誤
+                # : 檢查回傳資料是否為有效字典，避免 NoneType.get() 錯誤
                 if not data or not isinstance(data, dict):
                     self.context.log("WARN", f"Server returned empty or invalid data for task {task_id}")
                     return
@@ -552,10 +547,10 @@ class BacktestPlugin(ISateGuiPlugin):
         except Exception as e: 
             self.context.log("WARN", f"Auto-fetch result failed: {e}")
             
-    # --- 修正 on_config_indicators 呼叫本地對話框 ---
+    # ---  on_config_indicators 呼叫本地對話框 ---
     def on_config_indicators(self):
         current_config = self.context.get_config()
-        # [修正]: 使用 backtest 插件內定義的對話框
+        # : 使用 backtest 插件內定義的對話框
         from .layout import BacktestIndicatorManager
         dlg = BacktestIndicatorManager(current_config, self.app_data_dir, parent=self.widget)
         if dlg.exec():
@@ -617,45 +612,10 @@ class BacktestPlugin(ISateGuiPlugin):
             print(f"[BacktestPlugin] Requesting results from server for {task_id}...")
             self.proxy.send_command("BT_GET_RESULT", {"task_id": task_id}) 
 
-    # def _inject_view_indicators(self, project_id, data):
-        # """
-        # [核心修正]: 將變數名稱改為 K_BAR_DATA 以匹配 view.py 的預期。
-        # """
-        # proj_info = self.imported_projects.get(project_id)
-        # if not proj_info:
-            # return data
-
-        # proj_path = proj_info.get('path')
-        # view_path = os.path.join(proj_path, "view.py")
-        # data['indicators'] = [] 
-
-        # if os.path.exists(view_path):
-            # try:
-                # # 建立 DataFrame 並將變數名稱設為 K_BAR_DATA
-                # # 同時傳入 np 與 pd 供 view.py 內的計算使用
-                # df_input = pd.DataFrame(data.get('full_data', {}))
-                
-                # local_vars = {
-                    # 'K_BAR_DATA': df_input,    # <--- 關鍵修正：必須與 view.py 一致
-                    # 'ADDPLOT_CONFIG': [],
-                    # 'np': np,
-                    # 'pd': pd
-                # }
-                
-                # with open(view_path, 'r', encoding='utf-8') as f:
-                    # exec(f.read(), {}, local_vars)
-                
-                # # 提取 view.py 執行後的配置結果
-                # data['indicators'] = local_vars.get('ADDPLOT_CONFIG', [])
-                # self.context.log("INFO", f"[Backtest] 已成功從 {project_id}/view.py 注入 {len(data['indicators'])} 個指標。")
-            # except Exception as ve:
-                # self.context.log("ERROR", f"執行 view.py 失敗: {ve}")
-        
-        # return data
-    # --- 新增/重構統合注入函式 (取代原有的 _inject_view_indicators) ---
+    # --- /重構統合注入函式 (取代原有的 _inject_view_indicators) ---
     def _run_overlay_indicators(self, project_id, data):
         """
-        [統合修正]: 遍歷配置中的所有重疊指標(含 view.py)並執行。
+        [統合]: 遍歷配置中的所有重疊指標(含 view.py)並執行。
         """
         proj_info = self.imported_projects.get(project_id)
         if not proj_info: return data
@@ -718,11 +678,11 @@ class BacktestPlugin(ISateGuiPlugin):
             file_path = files[0]
             
         try:
-            # 1. 載入原始詳細數據 [修正]: 恢復載入邏輯
+            # 1. 載入原始詳細數據 : 恢復載入邏輯
             from shared.backtest.storage import ResultStorage
             data = ResultStorage.load_detail(file_path)
             
-            # 2. [修正]: 僅保留統合注入函式，移除不存在的 _inject_view_indicators
+            # 2. : 僅保留統合注入函式，移除不存在的 _inject_view_indicators
             data = self._run_overlay_indicators(project_id, data)
 
             # 3. 呼叫 UI 進行繪圖
@@ -736,7 +696,10 @@ class BacktestPlugin(ISateGuiPlugin):
             proj = self.imported_projects[pid]
             proj['status'] = "FINISHED"
             proj['last_result_path'] = file_path
+
+            # : 同步更新 UI 表格顯示
+            self.refresh_ui()
             
-            # [修正]: 使用統合後的指標注入並顯示結果，移除 attribute error 來源
+            # 使用統合後的指標注入並顯示結果，移除 attribute error 來源
             packet = self._run_overlay_indicators(pid, packet)
             self.widget.show_result(packet)        
