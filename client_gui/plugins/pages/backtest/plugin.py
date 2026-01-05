@@ -67,7 +67,7 @@ class LocalBacktestThread(QThread):
         return False
 
     def run(self):
-        """強制指定重置索引後的欄位名稱為 'datetime_index'，確保前後端 Key 值對齊"""
+        """[修正]: 解決 save_run 參數錯誤並確保 full_data 正確寫入磁碟。"""
         try:
             from shared.capabilities import CAP_HISTORICAL_DATA
             from shared.get_historydata.downloader import HistoryDownloader
@@ -75,6 +75,7 @@ class LocalBacktestThread(QThread):
             from datetime import datetime
             import sys
             import os
+            import json # 確保導入 json 以進行手動持久化
             
             # --- 1. 參數提取與防錯處理 ---
             params = self.proj_info.get('params', {})
@@ -120,18 +121,39 @@ class LocalBacktestThread(QThread):
             engine = UniversalBacktestEngine()
             result_bundle = engine.run_task(df, strat_mod, params)
             
-            # --- 5. 結果持久化 確保 index 轉換為名為 'datetime_index' 的 list ---
+            # --- 5. 結果持久化 [修正]: 準備標準化數據並處理存檔 ---
             from shared.backtest.storage import ResultStorage
+            
+            # [修正]: 確保欄位名稱標準化 (Open, High, Low, Close, Volume)
+            df_reset = df.reset_index()
+            col_map = {df_reset.columns[0]: 'datetime_index'}
+            for c in df_reset.columns:
+                if c.lower() in ['open', 'high', 'low', 'close', 'volume']:
+                    col_map[c] = c.capitalize()
+            df_reset.rename(columns=col_map, inplace=True)
+            full_data_dict = df_reset.to_dict(orient='list')
+
+            # [修正]: 回歸原始參數簽章，移除不支援的 full_data 關鍵字
             packet, file_path = ResultStorage.save_run(
                 strategy_name=self.proj_info.get('name', self.project_id),
                 metadata=params,
                 performance=result_bundle,
                 log_returns=[] 
             )
-            # 強制將 TimeIndex 重置並命名
-            df_reset = df.reset_index()
-            df_reset.rename(columns={df_reset.columns[0]: 'datetime_index'}, inplace=True)
-            packet['full_data'] = df_reset.to_dict(orient='list')
+            
+            # 手動將價格數據注入記憶體中的 packet 供立即顯示
+            packet['full_data'] = full_data_dict
+
+            # [修正]: 手動將 full_data 寫入實體 JSON 檔案，確保後續 Plot 讀取時資料完整
+            if file_path and os.path.exists(file_path):
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        disk_json = json.load(f)
+                    disk_json['full_data'] = full_data_dict
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        json.dump(disk_json, f, indent=4, ensure_ascii=False)
+                except Exception as fe:
+                    self.context.log("ERROR", f"Failed to manually sync full_data to disk: {fe}")
 
             self.sig_progress.emit(self.project_id, 100.0)
             self.sig_finished.emit(self.project_id, packet, file_path)
@@ -529,12 +551,17 @@ class BacktestPlugin(ISateGuiPlugin):
                 self.context.log("INFO", f"Result loaded for task {task_id}")
         except Exception as e: 
             self.context.log("WARN", f"Auto-fetch result failed: {e}")
+            
+    # --- 修正 on_config_indicators 呼叫本地對話框 ---
     def on_config_indicators(self):
         current_config = self.context.get_config()
-        dlg = IndicatorManagerDialog(current_config, self.app_data_dir, mode='BACKTEST', parent=self.widget)
+        # [修正]: 使用 backtest 插件內定義的對話框
+        from .layout import BacktestIndicatorManager
+        dlg = BacktestIndicatorManager(current_config, self.app_data_dir, parent=self.widget)
         if dlg.exec():
-            dlg.apply_changes()
-            if self.widget.last_result_data: self.widget.refresh_chart()
+            # 若已有載入數據，則重新觸發繪圖以套用新指標
+            if self.widget.last_result_data:
+                self.on_manual_plot_request(self.widget.current_edit_id)
 
     def _execute_plugin_from_appdata(self, filename, local_vars, target_plot, drawing_list, data_collection=None, is_overlay=True):
         subdir = 'overlays' if is_overlay else 'indicators'
@@ -552,14 +579,14 @@ class BacktestPlugin(ISateGuiPlugin):
     def cleanup(self): pass
     
     def handle_bt_finished(self, data):
-        """[修正]: 修正 self.tasks 引用錯誤，應為 self.imported_projects"""
+        """self.tasks 引用錯誤，應為 self.imported_projects"""
         task_id = data.get('task_id')
         status = data.get('status')
         report_content = data.get('parse_report', "") 
         
         print(f"[BacktestPlugin] Task {task_id} Finished. Status: {status}")
         
-        # [修正]: 統一使用 __init__ 中定義的 self.imported_projects 變數
+        # 統一使用 __init__ 中定義的 self.imported_projects 變數
         if task_id in self.imported_projects:
             self.imported_projects[task_id]['status'] = "FINISHED" if status == "ok" else "ERROR"
             self.imported_projects[task_id]['report'] = report_content 
@@ -590,39 +617,85 @@ class BacktestPlugin(ISateGuiPlugin):
             print(f"[BacktestPlugin] Requesting results from server for {task_id}...")
             self.proxy.send_command("BT_GET_RESULT", {"task_id": task_id}) 
 
-    def _inject_view_indicators(self, project_id, data):
+    # def _inject_view_indicators(self, project_id, data):
+        # """
+        # [核心修正]: 將變數名稱改為 K_BAR_DATA 以匹配 view.py 的預期。
+        # """
+        # proj_info = self.imported_projects.get(project_id)
+        # if not proj_info:
+            # return data
+
+        # proj_path = proj_info.get('path')
+        # view_path = os.path.join(proj_path, "view.py")
+        # data['indicators'] = [] 
+
+        # if os.path.exists(view_path):
+            # try:
+                # # 建立 DataFrame 並將變數名稱設為 K_BAR_DATA
+                # # 同時傳入 np 與 pd 供 view.py 內的計算使用
+                # df_input = pd.DataFrame(data.get('full_data', {}))
+                
+                # local_vars = {
+                    # 'K_BAR_DATA': df_input,    # <--- 關鍵修正：必須與 view.py 一致
+                    # 'ADDPLOT_CONFIG': [],
+                    # 'np': np,
+                    # 'pd': pd
+                # }
+                
+                # with open(view_path, 'r', encoding='utf-8') as f:
+                    # exec(f.read(), {}, local_vars)
+                
+                # # 提取 view.py 執行後的配置結果
+                # data['indicators'] = local_vars.get('ADDPLOT_CONFIG', [])
+                # self.context.log("INFO", f"[Backtest] 已成功從 {project_id}/view.py 注入 {len(data['indicators'])} 個指標。")
+            # except Exception as ve:
+                # self.context.log("ERROR", f"執行 view.py 失敗: {ve}")
+        
+        # return data
+    # --- 新增/重構統合注入函式 (取代原有的 _inject_view_indicators) ---
+    def _run_overlay_indicators(self, project_id, data):
         """
-        [核心修正]: 將變數名稱改為 K_BAR_DATA 以匹配 view.py 的預期。
+        [統合修正]: 遍歷配置中的所有重疊指標(含 view.py)並執行。
         """
         proj_info = self.imported_projects.get(project_id)
-        if not proj_info:
-            return data
-
+        if not proj_info: return data
+        
         proj_path = proj_info.get('path')
-        view_path = os.path.join(proj_path, "view.py")
-        data['indicators'] = [] 
-
-        if os.path.exists(view_path):
+        config = self.context.get_config()
+        active_list = config.get('backtest_k_bar_plugins', [])
+        
+        data['indicators'] = [] # 清空舊指標
+        df_input = pd.DataFrame(data.get('full_data', {}))
+        
+        for filename in active_list:
+            # 1. 決定檔案路徑 (view.py 在專案目錄，其餘在 AppData)
+            if filename == 'view.py':
+                script_path = os.path.join(proj_path, "view.py")
+            else:
+                script_path = os.path.join(self.app_data_dir, 'overlays', filename)
+            
+            if not os.path.exists(script_path): continue
+            
             try:
-                # 建立 DataFrame 並將變數名稱設為 K_BAR_DATA
-                # 同時傳入 np 與 pd 供 view.py 內的計算使用
-                df_input = pd.DataFrame(data.get('full_data', {}))
-                
+                # 2. 準備統一的注入環境
                 local_vars = {
-                    'K_BAR_DATA': df_input,    # <--- 關鍵修正：必須與 view.py 一致
+                    'K_BAR_DATA': df_input,
                     'ADDPLOT_CONFIG': [],
-                    'np': np,
-                    'pd': pd
+                    'np': np, 'pd': pd
                 }
                 
-                with open(view_path, 'r', encoding='utf-8') as f:
+                # 3. 執行腳本
+                with open(script_path, 'r', encoding='utf-8') as f:
                     exec(f.read(), {}, local_vars)
                 
-                # 提取 view.py 執行後的配置結果
-                data['indicators'] = local_vars.get('ADDPLOT_CONFIG', [])
-                self.context.log("INFO", f"[Backtest] 已成功從 {project_id}/view.py 注入 {len(data['indicators'])} 個指標。")
-            except Exception as ve:
-                self.context.log("ERROR", f"執行 view.py 失敗: {ve}")
+                # 4. 收集產出的配置
+                for plot_cfg in local_vars.get('ADDPLOT_CONFIG', []):
+                    # 標註來源以便 UI 識別
+                    plot_cfg['name'] = f"{filename}: {plot_cfg.get('kwargs', {}).get('label', 'Ind')}"
+                    data['indicators'].append(plot_cfg)
+                    
+            except Exception as e:
+                self.context.log("ERROR", f"執行指標 {filename} 失敗: {e}")
         
         return data
 
@@ -645,26 +718,25 @@ class BacktestPlugin(ISateGuiPlugin):
             file_path = files[0]
             
         try:
-            # 1. 載入原始詳細數據
+            # 1. 載入原始詳細數據 [修正]: 恢復載入邏輯
+            from shared.backtest.storage import ResultStorage
             data = ResultStorage.load_detail(file_path)
             
-            # 2. 注入 view.py 的指標數據
-            data = self._inject_view_indicators(project_id, data)
+            # 2. [修正]: 僅保留統合注入函式，移除不存在的 _inject_view_indicators
+            data = self._run_overlay_indicators(project_id, data)
 
             # 3. 呼叫 UI 進行繪圖
             self.widget.show_result(data)
         except Exception as e:
             self.context.log("ERROR", f"載入結果失敗: {e}")
 
-    # --- 別忘了同步修改自動顯示路徑 ---
+    # --- 安插位置前一行程式碼 ---
     def _on_local_finished(self, pid, packet, file_path):
         if pid in self.imported_projects:
             proj = self.imported_projects[pid]
             proj['status'] = "FINISHED"
             proj['last_result_path'] = file_path
-            self.refresh_ui()
             
-            # [自動路徑修正]: 回測完自動注入指標
-            packet = self._inject_view_indicators(pid, packet)
-            
-            self.widget.show_result(packet)          
+            # [修正]: 使用統合後的指標注入並顯示結果，移除 attribute error 來源
+            packet = self._run_overlay_indicators(pid, packet)
+            self.widget.show_result(packet)        

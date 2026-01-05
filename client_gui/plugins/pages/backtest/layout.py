@@ -17,10 +17,103 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QGroupBox, 
     QFormLayout, QLabel, QComboBox, QDateEdit, QDoubleSpinBox, 
     QTableWidget, QTableWidgetItem, QAbstractItemView, QTabWidget, 
-    QPushButton, QDialog, QTextEdit, QHeaderView, QCheckBox, QScrollBar
+    QPushButton, QDialog, QTextEdit, QHeaderView, QCheckBox, QScrollBar,
+    QListWidget, QListWidgetItem, QFileDialog, QDialogButtonBox, QMessageBox # <--- 修正: 補齊缺失元件
 )                             
 from PyQt6.QtCore import Qt, QDate, pyqtSignal, QTimer
 from PyQt6.QtGui import QColor, QPainter, QPen, QBrush
+
+# --- [新增] 專用於 Backtest 的指標管理對話框 (安插在 BacktestWidget 之前) ---
+import shutil
+
+class BacktestIndicatorManager(QDialog):
+    def __init__(self, config, app_data_dir, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("指標管理員 (Backtest)")
+        self.resize(600, 450)
+        self.config = config
+        self.app_data_dir = app_data_dir
+        self.key_ov = 'backtest_k_bar_plugins'
+        self.fixed_item = "view.py" # 固定項
+        
+        self.layout = QVBoxLayout(self)
+        
+        # 列表區域
+        self.layout.addWidget(QLabel("重疊指標列表 (★ 表示策略專屬視圖):"))
+        self.list_widget = QListWidget()
+        self.layout.addWidget(self.list_widget)
+        
+        # 按鈕區域
+        btn_layout = QHBoxLayout()
+        self.btn_import = QPushButton("匯入指標 (.py)")
+        self.btn_import.clicked.connect(self._on_import)
+        self.btn_delete = QPushButton("刪除指標")
+        self.btn_delete.setStyleSheet("background-color: #442222; color: white;")
+        self.btn_delete.clicked.connect(self._on_delete)
+        btn_layout.addWidget(self.btn_import)
+        btn_layout.addWidget(self.btn_delete)
+        btn_layout.addStretch()
+        self.layout.addLayout(btn_layout)
+        
+        # 確認按鈕
+        self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        self.buttons.accepted.connect(self._on_accept)
+        self.buttons.rejected.connect(self.reject)
+        self.layout.addWidget(self.buttons)
+        
+        self._refresh_list()
+
+    def _refresh_list(self):
+        self.list_widget.clear()
+        active_list = self.config.get(self.key_ov, [])
+        
+        # 1. 加入固定項 (策略視圖)
+        item = QListWidgetItem(f"★ {self.fixed_item} (策略視圖)")
+        item.setData(Qt.ItemDataRole.UserRole, {'name': self.fixed_item, 'fixed': True})
+        item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+        item.setCheckState(Qt.CheckState.Checked if self.fixed_item in active_list else Qt.CheckState.Unchecked)
+        self.list_widget.addItem(item)
+        
+        # 2. 加入 AppData 中的手動指標
+        ov_dir = os.path.join(self.app_data_dir, 'overlays')
+        if os.path.exists(ov_dir):
+            for f in sorted(os.listdir(ov_dir)):
+                # [修正]: 增加判斷式排除 self.fixed_item ("view.py")，避免重複顯示
+                if f.endswith('.py') and f != "strategy_core.py" and f != self.fixed_item:
+                    item = QListWidgetItem(f)
+                    item.setData(Qt.ItemDataRole.UserRole, {'name': f, 'fixed': False})
+                    item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsSelectable)
+                    item.setCheckState(Qt.CheckState.Checked if f in active_list else Qt.CheckState.Unchecked)
+                    self.list_widget.addItem(item)
+
+    def _on_import(self):
+        path, _ = QFileDialog.getOpenFileName(self, "選取指標腳本", "", "Python Files (*.py)")
+        if path:
+            target = os.path.join(self.app_data_dir, 'overlays', os.path.basename(path))
+            shutil.copy(path, target)
+            self._refresh_list()
+
+    def _on_delete(self):
+        item = self.list_widget.currentItem()
+        if not item: return
+        data = item.data(Qt.ItemDataRole.UserRole)
+        if data.get('fixed'):
+            QMessageBox.warning(self, "禁止刪: 策略視圖為核心組件，不可刪除。")
+            return
+        if QMessageBox.question(self, "刪除", f"確定刪除 {data['name']}？") == QMessageBox.StandardButton.Yes:
+            os.remove(os.path.join(self.app_data_dir, 'overlays', data['name']))
+            self._refresh_list()
+
+    def _on_accept(self):
+        selected = []
+        for i in range(self.list_widget.count()):
+            it = self.list_widget.item(i)
+            if it.checkState() == Qt.CheckState.Checked:
+                selected.append(it.data(Qt.ItemDataRole.UserRole)['name'])
+        self.config[self.key_ov] = selected
+        from shared.config_manager import save_config
+        save_config(self.config)
+        self.accept()
 
 class CandlestickItem(pg.GraphicsObject):
     def __init__(self, data):
@@ -142,7 +235,7 @@ class ChartSettingsDialog(QDialog):
 
 class ReportDialog(QDialog):
     """
-    [修正]: 恢復正確的報告彈窗顯示邏輯。
+    : 恢復正確的報告彈窗顯示邏輯。
     """
     def __init__(self, task_id, report_text, parent=None):
         super().__init__(parent)
@@ -237,7 +330,7 @@ class BacktestWidget(QWidget):
         # 專案列表
         self.import_widget = QWidget()
         self.import_layout = QVBoxLayout(self.import_widget)
-        # --- 修正: 在 "Project list" 標籤右方新增 <Run><Plot><Open> 按鍵 ---
+        # ---  在 "Project list" 標籤右方 <Run><Plot><Open> 按鍵 ---
         header_layout = QHBoxLayout()
         header_layout.addWidget(QLabel("Project list"))
         header_layout.addStretch()
@@ -259,22 +352,22 @@ class BacktestWidget(QWidget):
         self.import_layout.addLayout(header_layout)
         
         self.table_imports = QTableWidget()
-        # 修正: 最左邊新增勾選欄位，並刪除原有的 Run/Plot/DL 欄位
+        #  最左邊勾選欄位，並刪除原有的 Run/Plot/DL 欄位
         self.import_cols = ['', 'ID', 'Status']
         self.table_imports.setColumnCount(len(self.import_cols))
         self.table_imports.setHorizontalHeaderLabels(self.import_cols)
         self.table_imports.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         self.table_imports.setColumnWidth(0, 30)  
         #--
-        # 【新增以下這一行】連接點擊信號
+        # 【以下這一行】連接點擊信號
         self.table_imports.cellClicked.connect(self._on_import_cell_clicked)
 
-        # 【建議新增】設定整列選取，優化使用者體驗
+        # 【建議】設定整列選取，優化使用者體驗
         self.table_imports.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table_imports.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers) # 禁止直接編輯文字
         #--
-        self.import_layout.addWidget(self.table_imports) # 新增: 確保表格顯示在 UI 上        
-        # --- 修正: 將配置完成的 import_widget 加入左側控制面板佈局，使其正常顯示 ---
+        self.import_layout.addWidget(self.table_imports) # : 確保表格顯示在 UI 上        
+        # ---  將配置完成的 import_widget 加入左側控制面板佈局，使其正常顯示 ---
         self.control_layout.addWidget(self.import_widget)
         # --- Right Panel: 結果區域 ---
         self.result_panel = QWidget()
@@ -288,6 +381,13 @@ class BacktestWidget(QWidget):
         self.corner_widget = QWidget()
         self.corner_layout = QHBoxLayout(self.corner_widget)
         self.corner_layout.setContentsMargins(0, 0, 5, 0)
+
+        # [新增]: 指標管理員按鈕
+        self.btn_indicators = QPushButton("📊 指標管理")
+        self.btn_indicators.setFixedWidth(80)
+        self.btn_indicators.setStyleSheet("QPushButton { border: none; background: transparent; color: #888888; } QPushButton:hover { color: #4ec9b0; }")
+        self.btn_indicators.clicked.connect(self.sig_config_indicators.emit)
+        self.corner_layout.addWidget(self.btn_indicators)
         
         self.btn_settings = QPushButton("⚙️ 設置")
         self.btn_settings.setFixedWidth(60)
@@ -433,12 +533,12 @@ class BacktestWidget(QWidget):
                 self.combo_contract.setCurrentText(current_text)
                 
     def update_imports_table(self, imported_list):
-        """[修正]: 在 ID 欄位項目中存入 strategy_name 以供 _on_bulk_open 使用"""
+        """: 在 ID 欄位項目中存入 strategy_name 以供 _on_bulk_open 使用"""
         self.table_imports.setRowCount(0)
         for i, item in enumerate(imported_list):
             self.table_imports.insertRow(i)
 
-            # --- 修正: 最左邊新增 "勾選" 欄位項目 ---
+            # ---  最左邊 "勾選" 欄位項目 ---
             chk_item = QTableWidgetItem()
             chk_item.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
             chk_item.setCheckState(Qt.CheckState.Unchecked)
@@ -447,7 +547,7 @@ class BacktestWidget(QWidget):
             pid = str(item.get('id', 'Unknown'))
             id_item = QTableWidgetItem(pid)
             
-            # [修正]: 將專案名稱 (策略名稱) 存入 UserRole，確保開啟資料夾時能精準對應磁碟目錄
+            # : 將專案名稱 (策略名稱) 存入 UserRole，確保開啟資料夾時能精準對應磁碟目錄
             strategy_name = item.get('name', pid)
             id_item.setData(Qt.ItemDataRole.UserRole, strategy_name)
             
@@ -478,7 +578,7 @@ class BacktestWidget(QWidget):
         # [關鍵]: 強制讓兩個 PlotWidget 的 X 軸更新，清除內部快取
         self.pw_kline.getAxis('bottom').update()
         self.pw_equity.getAxis('bottom').update()
-        self.pw_mdd.getAxis('bottom').update() # 新增: 強制 MDD 軸重繪
+        self.pw_mdd.getAxis('bottom').update() # : 強制 MDD 軸重繪
 
         summary = data.get('performance_summary', {})
         metrics = [
@@ -641,7 +741,7 @@ class BacktestWidget(QWidget):
             # 若無效數據，回歸自動縮放
             self.pw_kline.enableAutoRange(axis='y', enable=True)
 
-        # --- [新增]: Equity Curve 與 MDD 的智慧 Y 軸縮放 ---
+        # --- []: Equity Curve 與 MDD 的智慧 Y 軸縮放 ---
         summary = self.last_result_data.get('performance_summary', {})
         eq_curve = summary.get('equity_curve', [])
         dd_curve = summary.get('drawdown_curve', [])
@@ -782,7 +882,7 @@ class BacktestWidget(QWidget):
     def set_params(self, params):
         if not params: return
         
-        # --- 修正: 補齊策略與資金設定，確保 Task Settings 完全帶出 ---
+        # ---  補齊策略與資金設定，確保 Task Settings 完全帶出 ---
         strategy = params.get('strategy_file', '')
         s_idx = self.combo_strategy.findText(strategy)
         if s_idx >= 0: 
@@ -802,7 +902,7 @@ class BacktestWidget(QWidget):
         self.spin_cash.setValue(float(params.get('initial_cash', 100.0)))
 
     def _on_import_cell_clicked(self, row, col):
-        # --- 修正: 改為抓取索引 1 (ID 欄位)，並更新上方提示標籤 ---
+        # ---  改為抓取索引 1 (ID 欄位)，並更新上方提示標籤 ---
         item = self.table_imports.item(row, 1) 
         if item: 
             project_id = item.text()
@@ -814,7 +914,7 @@ class BacktestWidget(QWidget):
         dlg = ReportDialog(task_id, content, self)
         dlg.exec()
         
-    # --- 新增: 批次處理邏輯 ---
+    # --- : 批次處理邏輯 ---
     def _get_checked_ids(self):
         """獲取所有被勾選的專案 ID"""
         checked_ids = []
@@ -843,7 +943,7 @@ class BacktestWidget(QWidget):
                     break
 
     def _on_bulk_open(self):
-        """[修正]: 使用 ResultStorage 獲取正確路徑 (SSTP 標準)，並加入查無資料夾的提示"""
+        """: 使用 ResultStorage 獲取正確路徑 (SSTP 標準)，並加入查無資料夾的提示"""
         import os
         from shared.backtest.storage import ResultStorage
         from PyQt6.QtWidgets import QMessageBox
@@ -877,7 +977,7 @@ class BacktestWidget(QWidget):
             if os.path.exists(target_dir):
                 QDesktopServices.openUrl(QUrl.fromLocalFile(target_dir))
             else:
-                # [修正]: 增加 UI 錯誤提示
+                # : 增加 UI 錯誤提示
                 QMessageBox.warning(
                     self, "資料夾未找到", 
                     f"專案 {info['pid']} ({strategy_name}) 尚未產生回測結果資料夾。"

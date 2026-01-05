@@ -26,8 +26,7 @@
         "rsi_plot.py"
     ],
     "backtest_k_bar_plugins": [
-        "bt_cost_line.py",
-        "bt_strategy_ma.py"
+        "view.py"
     ],
     "backtest_independent_plots": [
         "bt_equity.py",
