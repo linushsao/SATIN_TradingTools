@@ -23,7 +23,7 @@
     ],
     "live_independent_plots": [
         "volume_plot.py",
-        "rsi_plot.py"
+        "subchart_rsi_stdev.py"
     ],
     "backtest_k_bar_plugins": [
         "view.py"

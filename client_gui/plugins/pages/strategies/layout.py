@@ -500,7 +500,7 @@ class StrategiesWidget(QWidget):
         self.date_e = QDateEdit()
         self.date_e.setCalendarPopup(True)
         self.date_e.setDate(QDate.currentDate())
-        btn_load = QPushButton("Load Data")
+        btn_load = QPushButton("Render")
         btn_load.clicked.connect(self._on_load)
         btn_ind = QPushButton("Indicators")
         btn_ind.clicked.connect(self.sig_open_indicators.emit)

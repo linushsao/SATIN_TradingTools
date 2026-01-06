@@ -593,13 +593,20 @@ class KLineChartWidget(QWidget):
             data = cfg.get('data'); kwargs = cfg.get('kwargs', {})
             if data is None or len(data) == 0: continue
             label = kwargs.get('label', label_prefix)
-            if target_plot in self.plot_indicators_map: self.plot_indicators_map[target_plot].append((label, data.values))
-            if data_collection is not None: data_collection.append(data.values)
-            self.indicator_data[label] = data.values 
             
+            # [修正]: 提前解析顏色資訊
             mpl_color = kwargs.get('color', 'white')
             if isinstance(mpl_color, (list, np.ndarray)): pg_color = '#FFFFFF' 
             else: pg_color = COLOR_MAP.get(mpl_color, '#FFFFFF')
+
+            # [修正]: 將顏色資訊 (pg_color) 存入映射表，供 UI 標籤使用
+            if target_plot in self.plot_indicators_map: 
+                self.plot_indicators_map[target_plot].append((label, data.values, pg_color))
+            
+            if data_collection is not None: data_collection.append(data.values)
+            
+            # [修正]: 將顏色資訊一併存入 indicator_data 供 HUD 使用
+            self.indicator_data[label] = (data.values, pg_color) 
             
             width = kwargs.get('linewidth', 1)
             style_str = kwargs.get('linestyle', '-')
@@ -609,7 +616,8 @@ class KLineChartWidget(QWidget):
 
             if plot_type == 'bar':
                     if isinstance(mpl_color, (list, np.ndarray)):
-                        brushes = [COLOR_MAP.get(c, '#FFFFFF') for c in mpl_color]
+                        # brushes = [COLOR_MAP.get(c, '#FFFFFF') for c in mpl_color]
+                        brushes = [COLOR_MAP.get(c, c) for c in mpl_color]
                         item = pg.BarGraphItem(x=x_axis, height=data.values, width=0.6, brushes=brushes)
                     else:
                         brush = pg.mkBrush(pg_color)
@@ -653,19 +661,22 @@ class KLineChartWidget(QWidget):
         freq = self.target_freq
         main_info = f"<span style='color:#FFFFFF; font-weight:bold'>{self.current_code}</span>&nbsp;<span style='color:#E6DB74; font-weight:bold'>[{freq}m]</span>&nbsp;&nbsp;<span style='color:#DDD'>{ts_str}</span>&nbsp;&nbsp;O:<span style='color:#EEE'>{row['Open']:.0f}</span>&nbsp;H:<span style='color:#EEE'>{row['High']:.0f}</span>&nbsp;L:<span style='color:#EEE'>{row['Low']:.0f}</span>&nbsp;C:<span style='color:{c_color}'>{row['Close']:.0f}</span>&nbsp;V:<span style='color:#EEE'>{int(row['Volume'])}</span>"
         if self.plot_main in self.plot_indicators_map:
-            for label, values in self.plot_indicators_map[self.plot_main]:
-                if index < len(values) and not np.isnan(values[index]): main_info += f"&nbsp;&nbsp;{label}:<span style='color:#00FFFF'>{values[index]:.2f}</span>"
+            # [修正]: 解構 tuple 並套用 color 至 HTML 標籤
+            for label, values, color in self.plot_indicators_map[self.plot_main]:
+                if index < len(values) and not np.isnan(values[index]): main_info += f"&nbsp;&nbsp;{label}:<span style='color:{color}'>{values[index]:.2f}</span>"
         if self.main_info_label: self.main_info_label.setText(f"<html>{main_info}</html>"); self.main_info_label.adjustSize()
         for item in self.indep_plots:
             plot = item['plot']; sub_info = ""
             if plot in self.plot_indicators_map:
-                for label, values in self.plot_indicators_map[plot]:
-                    if index < len(values) and not np.isnan(values[index]): sub_info += f"{label}:<span style='color:#00FFFF'>{values[index]:.2f}</span>  "
+                # [修正]: 解構 tuple 並套用 color 至 HTML 標籤
+                for label, values, color in self.plot_indicators_map[plot]:
+                    if index < len(values) and not np.isnan(values[index]): sub_info += f"{label}:<span style='color:{color}'>{values[index]:.2f}</span>  "
             item['info_label'].setText(f"<html>{sub_info}</html>"); item['info_label'].adjustSize()
         if self.config.get('show_hud', True) and self.hud_label.isVisible():
             hud_html = f"<div>{self.current_code} [{freq}m]</div><div style='font-weight:bold; color:#DDD'>{ts_str}</div><div>O: <span style='color:#EEE'>{row['Open']:.0f}</span></div><div>H: <span style='color:#EEE'>{row['High']:.0f}</span></div><div>L: <span style='color:#EEE'>{row['Low']:.0f}</span></div><div>C: <span style='color:{c_color}'>{row['Close']:.0f}</span></div><div>V: <span style='color:#EEE'>{int(row['Volume'])}</span></div>"
-            for name, values in self.indicator_data.items():
-                if index < len(values) and not np.isnan(values[index]): hud_html += f"<div>{name}: <span style='color:#00FFFF'>{values[index]:.2f}</span></div>"
+            # [修正]: 迭代 indicator_data 時解構 (values, color)
+            for name, (values, color) in self.indicator_data.items():
+                if index < len(values) and not np.isnan(values[index]): hud_html += f"<div>{name}: <span style='color:{color}'>{values[index]:.2f}</span></div>"
             self.hud_label.setText(f"<html>{hud_html}</html>"); self.hud_label.adjustSize()
 
     def mouse_moved(self, evt):
