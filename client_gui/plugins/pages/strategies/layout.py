@@ -444,6 +444,7 @@ class StrategiesWidget(QWidget):
     sig_open_external = pyqtSignal() 
     sig_editor_options = pyqtSignal()
     sig_deploy_req = pyqtSignal()
+    sig_stop_strategy_req = pyqtSignal(str)
     
     def __init__(self):
         super().__init__()
@@ -529,7 +530,16 @@ class StrategiesWidget(QWidget):
         self.act_deploy.setToolTip("將此專案部署並註冊至交易服務")
         self.act_deploy.triggered.connect(self.sig_deploy_req.emit)
         self.editor_toolbar.addAction(self.act_deploy)
-        self.editor_toolbar.addSeparator()        
+        self.editor_toolbar.addSeparator() 
+        #---
+        # [新增停止按鈕]
+        self.act_stop = QAction("Stop Strategy", self)
+        self.act_stop.setToolTip("停止目前正在伺服器端執行的策略實例")
+        self.act_stop.triggered.connect(self._on_stop_req)
+        self.editor_toolbar.addAction(self.act_stop)
+        self.editor_toolbar.addSeparator()
+
+        self.act_deploy = QAction("Deploy to Server", self)        
         #---
         self.act_open_ext = QAction("External Editor", self)
         self.act_open_ext.triggered.connect(self.sig_open_external.emit)
@@ -584,16 +594,6 @@ class StrategiesWidget(QWidget):
             content = self.code_editor.get_content()
             self.sig_save_file.emit(self.current_file_name, content)
     
-    # def load_data(self, df, code="--", freq="1m"):
-        # if df is not None:
-            # map_cols = {'open':'Open','high':'High','low':'Low','close':'Close','volume':'Volume'}
-            # df.rename(columns=lambda x: map_cols.get(x.lower(), x), inplace=True)
-            # df = df.reset_index(drop=True)
-        
-        # self.chart_view.set_info_meta(code, freq)
-        # self.full_df = df
-        # self.refresh_chart()
-
     def load_data(self, df, code="--", freq="1m"):
         """
         [修正] 載入資料至顯示工具，確保 'Date' 欄位被正確保留。
@@ -665,3 +665,9 @@ class StrategiesWidget(QWidget):
                 self.chart_view.exec_plugin_callback(f, v, None, self.indicator_items, is_overlay=is_ov)
             except Exception as e:
                 print(f"Render Error: {e}")
+                
+    def _on_stop_req(self):
+        """觸發停止請求，帶入目前的專案 ID"""
+        pid = self.config_form.current_editing_id
+        if pid:
+            self.sig_stop_strategy_req.emit(str(pid))                

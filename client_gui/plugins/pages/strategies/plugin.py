@@ -68,6 +68,33 @@ class StrategiesPlugin(ISateGuiPlugin):
         self.widget.chart_view.exec_plugin_callback = self._execute_plugin_from_appdata
         self.refresh_ui()
 
+    def _on_stop_strategy(self, pid):
+        """
+        發送停止指令至伺服器端。
+        """
+        from shared.capabilities import CAP_STRATEGY_HOST
+        
+        # 1. 確認連線服務
+        svc = self.context.get_service_by_capability(CAP_STRATEGY_HOST)
+        if not svc:
+            self.context.show_message("操作失敗", "找不到具備策略託管能力的服務。", "error")
+            return
+
+        # 2. 執行停止指令 (STR_STOP)
+        try:
+            self.context.log("INFO", f"[Strategies] Requesting stop for strategy ID: {pid}")
+            # 根據 service_trading 協定，停止指令需要 id 參數 
+            response = svc.call("STR_STOP", {"id": pid})
+            
+            if response and response.get('status') == 'ok':
+                self.context.show_message("停止成功", f"策略 (ID: {pid}) 已發送停止指令。", "info")
+            else:
+                msg = response.get('msg', 'Unknown error')
+                self.context.show_message("停止失敗", f"伺服器回應: {msg}", "error")
+        except Exception as e:
+            self.context.log("ERROR", f"Stop Strategy Exception: {e}")
+            self.context.show_message("操作異常", str(e), "error")
+
     def _on_deploy_to_server(self):
         """
         打包當前專案檔案與表單參數，發送至服務端 [cite: 1, 2]。
