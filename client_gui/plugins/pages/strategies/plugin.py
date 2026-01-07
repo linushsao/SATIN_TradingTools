@@ -61,9 +61,10 @@ class StrategiesPlugin(ISateGuiPlugin):
         self.widget.sig_save_project.connect(self._on_save_project)
         self.widget.sig_open_external.connect(self._on_open_external)
         self.widget.sig_editor_options.connect(self._on_editor_options)  
-        #---
-        # [新增訊號連接]
-        self.widget.sig_deploy_req.connect(self._on_deploy_to_server)        
+        self.widget.sig_deploy_req.connect(self._on_deploy_to_server)  
+        self.widget.sig_stop_strategy_req.connect(self._on_stop_strategy)
+        # [新增] 監聽參數頁面的 Active 變化，即時反饋到按鈕
+        self.widget.config_form.sig_active_changed.connect(self.widget.set_deploy_status)        
         #---
         self.widget.chart_view.exec_plugin_callback = self._execute_plugin_from_appdata
         self.refresh_ui()
@@ -219,12 +220,13 @@ class StrategiesPlugin(ISateGuiPlugin):
                 d = json.load(f)
                 d['id'] = pid
                 self.widget.config_form.set_form_data(d)
-        # [修正]: 根據 config 隱藏特定系統或設定檔案 (如 metadata.json, schema_cache.json)
+                # [新增] 載入專案時，立即根據 metadata 中的 is_active 決定部署按鈕狀態
+                is_active = d.get('is_active', True) # 預設為 True 
+                self.widget.set_deploy_status(is_active)                
         cfg = self.context.get_config()
         hidden_files = cfg.get('strategy_hidden_files', ['metadata.json', 'schema_cache.json'])
         
         self.widget.file_list.setRowCount(0)
-#        files = sorted(os.listdir(base))
         files = [f for f in sorted(os.listdir(base)) if f not in hidden_files]
         for f in files:
             r = self.widget.file_list.rowCount()

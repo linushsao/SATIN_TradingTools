@@ -290,6 +290,9 @@ class IndicatorManagerDialog(QDialog):
         return ovs, inds
 
 class StrategyConfigForm(QWidget):
+    # [新增] 定義 Active 狀態改變訊號
+    sig_active_changed = pyqtSignal(bool)    
+    
     def __init__(self):
         super().__init__()
         self.current_editing_id = None
@@ -322,11 +325,10 @@ class StrategyConfigForm(QWidget):
             lbl.setStyleSheet("color: red;")
             self.form_params.addRow(lbl)
             return
+
         props = schema.get('properties', {})
         for key in props.keys():
-            # [修正點]：關鍵過濾邏輯
-            # 即使 schema 物件中包含了 'name' (可能來自 plugin.py 的降級回傳), 
-            # 這裡也必須跳過，因為 'name' 已經在 self.input_name 處理過了。
+
             if key.lower() in ['id', 'name']:
                 continue            
             details = props[key]
@@ -363,8 +365,12 @@ class StrategyConfigForm(QWidget):
                 widget.setDecimals(4)
             elif dtype == 'boolean':
                 widget = QCheckBox()
+                # [新增連動邏輯] 若欄位是 is_active，則綁定狀態改變訊號
+                if key == 'is_active':
+                    widget.toggled.connect(self.sig_active_changed.emit)                
             else:
                 widget = QLineEdit()
+                
             self.form_params.addRow(f"{title}:", widget)
             self.dynamic_widgets[key] = widget
 
@@ -538,8 +544,6 @@ class StrategiesWidget(QWidget):
         self.act_stop.triggered.connect(self._on_stop_req)
         self.editor_toolbar.addAction(self.act_stop)
         self.editor_toolbar.addSeparator()
-
-        self.act_deploy = QAction("Deploy to Server", self)        
         #---
         self.act_open_ext = QAction("External Editor", self)
         self.act_open_ext.triggered.connect(self.sig_open_external.emit)
@@ -670,4 +674,14 @@ class StrategiesWidget(QWidget):
         """觸發停止請求，帶入目前的專案 ID"""
         pid = self.config_form.current_editing_id
         if pid:
-            self.sig_stop_strategy_req.emit(str(pid))                
+            self.sig_stop_strategy_req.emit(str(pid))
+
+    def set_deploy_status(self, is_active: bool):
+        """
+        [新增] 根據 Active 參數啟用或禁用部署按鈕
+        """
+        self.act_deploy.setEnabled(is_active)
+        if is_active:
+            self.act_deploy.setToolTip("將此專案部署並註冊至交易服務")
+        else:
+            self.act_deploy.setToolTip("請先在 Settings 頁面開啟 'Active' 參數以進行部署")            
