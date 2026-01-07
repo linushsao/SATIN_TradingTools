@@ -60,9 +60,72 @@ class StrategiesPlugin(ISateGuiPlugin):
         self.widget.sig_save_file.connect(self._on_save_f)
         self.widget.sig_save_project.connect(self._on_save_project)
         self.widget.sig_open_external.connect(self._on_open_external)
-        self.widget.sig_editor_options.connect(self._on_editor_options)        
+        self.widget.sig_editor_options.connect(self._on_editor_options)  
+        #---
+        # [新增訊號連接]
+        self.widget.sig_deploy_req.connect(self._on_deploy_to_server)        
+        #---
         self.widget.chart_view.exec_plugin_callback = self._execute_plugin_from_appdata
         self.refresh_ui()
+
+    def _on_deploy_to_server(self):
+        """
+        打包當前專案檔案與表單參數，發送至服務端 [cite: 1, 2]。
+        """
+        from shared.capabilities import CAP_STRATEGY_HOST
+        
+        pid = self.widget.config_form.current_editing_id
+        if not pid:
+            self.context.show_message("部署失敗", "請先選擇一個專案 。", "warn")
+            return
+
+        # 1. 取得專案路徑與檔案內容
+        ws = self.context.get_workspace_path()
+        base_path = os.path.join(ws, pid)
+        strat_path = os.path.join(base_path, "strategy.py")
+        core_path = os.path.join(base_path, "strategy_core.py")
+
+        if not os.path.exists(strat_path):
+            self.context.show_message("部署失敗", f"找不到進入點檔案: strategy.py ", "error")
+            return
+
+        try:
+            with open(strat_path, 'r', encoding='utf-8') as f:
+                strat_content = f.read()
+            
+            core_content = ""
+            if os.path.exists(core_path):
+                with open(core_path, 'r', encoding='utf-8') as f:
+                    core_content = f.read()
+
+            # 2. 收集表單參數 (包含 Account, Contract, Freq 等) 
+            form_data = self.widget.config_form.get_form_data()
+            
+            # 3. 組合部署封包
+            payload = {
+                "strategy_name": f"strategy_{pid}.py", # 強制重新命名避免衝突
+                "strategy_content": strat_content,
+                "core_content": core_content,
+                **form_data # 展開表單參數，供 StrategyExecutor.add_strategy 使用
+            }
+
+            # 4. 發送至服務端
+            svc = self.context.get_service_by_capability(CAP_STRATEGY_HOST)
+            if svc:
+                self.context.log("INFO", f"[Strategies] Sending deployment for project {pid}...")
+                response = svc.call("DEPLOY_STRATEGY", payload)
+                
+                if response and response.get('status') == 'ok':
+                    self.context.show_message("部署成功", f"專案 {form_data.get('name')} 已上傳並啟動 。", "info")
+                else:
+                    msg = response.get('msg', 'Unknown error')
+                    self.context.show_message("部署失敗", f"伺服器回應: {msg}", "error")
+            else:
+                self.context.show_message("部署失敗", "找不到具備策略託管能力 (CAP_STRATEGY_HOST) 的服務 。", "error")
+
+        except Exception as e:
+            self.context.log("ERROR", f"Deployment Exception: {e}")
+            self.context.show_message("部署異常", str(e), "error")
 
     def get_widget(self):
         return self.widget

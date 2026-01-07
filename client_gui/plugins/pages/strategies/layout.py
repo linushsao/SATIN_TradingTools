@@ -15,8 +15,6 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
     QTableWidget, QTableWidgetItem, QHeaderView, QSplitter, 
     QFrame, QFormLayout, QLineEdit, QComboBox, QDateEdit, 
-    # QTabWidget, QDialog, QDialogButtonBox, QSpinBox, QDoubleSpinBox, QCheckBox,
-    # QGroupBox, QListWidget, QListWidgetItem, QMessageBox
     QTabWidget, QDialog, QDialogButtonBox, QSpinBox, QDoubleSpinBox, QCheckBox,
     QGroupBox, QListWidget, QListWidgetItem, QMessageBox, QToolBar, QFileDialog    
 )
@@ -443,9 +441,10 @@ class StrategiesWidget(QWidget):
     sig_open_options = pyqtSignal()
     sig_open_indicators = pyqtSignal()
     sig_file_selected = pyqtSignal(str)
-    sig_open_external = pyqtSignal()  # [NEW]
-    sig_editor_options = pyqtSignal() # [NEW]
-
+    sig_open_external = pyqtSignal() 
+    sig_editor_options = pyqtSignal()
+    sig_deploy_req = pyqtSignal()
+    
     def __init__(self):
         super().__init__()
         self.full_df = None
@@ -524,6 +523,14 @@ class StrategiesWidget(QWidget):
         
         # --- Toolbar ---
         self.editor_toolbar = QToolBar()
+        #---
+        # [新增部署按鈕]
+        self.act_deploy = QAction("Deploy to Server", self)
+        self.act_deploy.setToolTip("將此專案部署並註冊至交易服務")
+        self.act_deploy.triggered.connect(self.sig_deploy_req.emit)
+        self.editor_toolbar.addAction(self.act_deploy)
+        self.editor_toolbar.addSeparator()        
+        #---
         self.act_open_ext = QAction("External Editor", self)
         self.act_open_ext.triggered.connect(self.sig_open_external.emit)
         self.editor_toolbar.addAction(self.act_open_ext)
