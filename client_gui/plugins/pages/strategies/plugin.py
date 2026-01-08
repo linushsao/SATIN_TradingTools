@@ -98,23 +98,32 @@ class StrategiesPlugin(ISateGuiPlugin):
 
     def _on_deploy_to_server(self):
         """
-        打包當前專案檔案與表單參數，發送至服務端 [cite: 1, 2]。
+        [完整覆蓋版本]: 打包策略檔案、推送至服務端並顯示實時診斷結果。
         """
+        import os
         from shared.capabilities import CAP_STRATEGY_HOST
-        
+        from PyQt6.QtWidgets import QMessageBox
+
+        # 1. 基本校驗：是否選擇專案
         pid = self.widget.config_form.current_editing_id
         if not pid:
-            self.context.show_message("部署失敗", "請先選擇一個專案 。", "warn")
+            self.context.show_message("部署失敗", "請先選擇一個專案。", "warn")
             return
 
-        # 1. 取得專案路徑與檔案內容
+        # 2. 取得目標服務 (具備策略執行能力)
+        svc = self.context.get_service_by_capability(CAP_STRATEGY_HOST)
+        if not svc:
+            self.context.show_message("部署失敗", "找不到具備策略託管能力 (CAP_STRATEGY_HOST) 的服務。", "error")
+            return
+
+        # 3. 讀取專案檔案內容
         ws = self.context.get_workspace_path()
         base_path = os.path.join(ws, pid)
         strat_path = os.path.join(base_path, "strategy.py")
         core_path = os.path.join(base_path, "strategy_core.py")
 
         if not os.path.exists(strat_path):
-            self.context.show_message("部署失敗", f"找不到進入點檔案: strategy.py ", "error")
+            self.context.show_message("部署失敗", f"找不到進入點檔案: strategy.py", "error")
             return
 
         try:
@@ -126,35 +135,69 @@ class StrategiesPlugin(ISateGuiPlugin):
                 with open(core_path, 'r', encoding='utf-8') as f:
                     core_content = f.read()
 
-            # 2. 收集表單參數 (包含 Account, Contract, Freq 等) 
+            # 4. 收集表單參數與組合封包
             form_data = self.widget.config_form.get_form_data()
-            
-            # 3. 組合部署封包
             payload = {
-                "strategy_name": f"strategy_{pid}.py", # 強制重新命名避免衝突
-                "strategy_content": strat_content,
-                "core_content": core_content,
-                **form_data # 展開表單參數，供 StrategyExecutor.add_strategy 使用
+                "cmd": "DEPLOY_STRATEGY",
+                "args": {
+                    "id": pid,
+                    "strategy_name": f"strategy_{pid}.py",
+                    "strategy_content": strat_content,
+                    "core_content": core_content,
+                    **form_data
+                }
             }
 
-            # 4. 發送至服務端
-            svc = self.context.get_service_by_capability(CAP_STRATEGY_HOST)
-            if svc:
-                self.context.log("INFO", f"[Strategies] Sending deployment for project {pid}...")
-                response = svc.call("DEPLOY_STRATEGY", payload)
+            # 5. 發送部署指令
+            self.context.log("INFO", f"[Strategies] Deploying project {pid} to server...")
+            response = svc.call("DEPLOY_STRATEGY", payload['args'])
+            
+            if response and response.get('status') == 'ok':
+                # --- 診斷看板邏輯開始 ---
+                diag = response.get('diagnostics', {})
+                broker_conn = diag.get('broker_connection', 'Unknown')
+                market_data = diag.get('market_data', 'Unknown')
+                env_mode = diag.get('mode', 'SIMULATION')
                 
-                if response and response.get('status') == 'ok':
-                    self.context.show_message("部署成功", f"專案 {form_data.get('name')} 已上傳並啟動 。", "info")
-                else:
-                    msg = response.get('msg', 'Unknown error')
-                    self.context.show_message("部署失敗", f"伺服器回應: {msg}", "error")
+                # 判定圖示與警告訊息
+                status_icon = "✅"
+                warning_msg = ""
+                
+                # 安全警示：真實環境但沒登入
+                if env_mode == 'PRODUCTION' and broker_conn != 'ONLINE':
+                    status_icon = "❌"
+                    warning_msg = "\n⚠️ 警告：目前為真實交易模式，但券商帳號尚未登入！"
+                elif market_data == 'PENDING':
+                    status_icon = "⚠️"
+                    warning_msg = "\nℹ️ 提示：策略已就緒，但行情數據尚未訂閱成功 (可能非交易時段)。"
+
+                diag_text = (
+                    f"{status_icon} 策略部署成功！\n\n"
+                    f"--- 服務端診斷報告 ---\n"
+                    f"● 運行環境：{env_mode}\n"
+                    f"● 程式重載：{diag.get('reload', 'SUCCESS')}\n"
+                    f"● 券商連線：{broker_conn}\n"
+                    f"● 行情訂閱：{market_data}\n"
+                    f"----------------------\n"
+                    f"{warning_msg}"
+                )
+
+                # 顯示診斷對話框
+                msg_box = QMessageBox(self.widget)
+                msg_box.setWindowTitle("部署結果診斷")
+                msg_box.setText(diag_text)
+                msg_box.setIcon(QMessageBox.Icon.Information if status_icon == "✅" else QMessageBox.Icon.Warning)
+                msg_box.exec()
+                # --- 診斷看板邏輯結束 ---
+
+                self.context.log("INFO", f"[Strategies] Project {pid} deployed with diagnostics: {diag}")
             else:
-                self.context.show_message("部署失敗", "找不到具備策略託管能力 (CAP_STRATEGY_HOST) 的服務 。", "error")
+                msg = response.get('msg', 'Unknown error')
+                self.context.show_message("部署失敗", f"伺服器回應: {msg}", "error")
 
         except Exception as e:
             self.context.log("ERROR", f"Deployment Exception: {e}")
             self.context.show_message("部署異常", str(e), "error")
-
     def get_widget(self):
         return self.widget
 
