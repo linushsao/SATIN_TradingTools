@@ -149,8 +149,14 @@ class SystemLogPlugin(ISateGuiPlugin):
         local_projects = self.project_mgr.get_projects()
         local_list = []
         for pid, info in local_projects.items():
+            # [修正]: 區分邏輯 ID (pid) 與 顯示名稱 (info['name'])
+            # 如果 metadata 中沒有 name，則回退使用 pid (例如 101)
+            display_name = info.get('name', pid)
+            
             local_list.append({
-                "name": pid, "path": info.get('path', ''),
+                "id": pid,              # 新增 id 欄位供邏輯識別 (如刪除)
+                "name": display_name,    # 這裡現在存儲真實的專案名稱 [修正點]
+                "path": info.get('path', ''),
                 "updated_at": info.get('updated_at', '-')
             })
         self.widget.dashboard.update_local_projects(local_list)

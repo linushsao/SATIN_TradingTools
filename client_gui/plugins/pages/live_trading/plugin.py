@@ -98,18 +98,21 @@ class LiveTradingPlugin(ISateGuiPlugin):
             
             if recv_freq == target_freq:
                 data = payload.get('data', [])
+                
+                # [新增日誌]: 追蹤 00:00 附近資料是否正確抵達
+                if data:
+                    last_time = data[-1].get('ts', '')
+                    if "00:00" in str(last_time):
+                        self.context.log("INFO", f"[Live] Midnight K-Bar received: {last_time}, count={len(data)}")
+                
                 self.widget.chart_widget.update_data(data)
                 
+                # 原有的不足資料自動回填邏輯...
                 if self.current_code and self.current_code not in self._checked_codes:
                     min_bars = self.context.get_config().get('min_display_bars', 1600)
                     if len(data) < min_bars:
-                        self.context.log("WARN", f"[Live] Data insufficient ({len(data)} < {min_bars}). Auto-downloading history for {self.current_code}...")
                         self._trigger_auto_download(self.current_code)
-                    
                     self._checked_codes.add(self.current_code)
-                    
-        elif topic == "STRATEGY":
-            self.widget.strategy_table.update_data(payload.get('data', []))
 
     def _trigger_auto_download(self, code):
         end_date = datetime.now().strftime('%Y-%m-%d')

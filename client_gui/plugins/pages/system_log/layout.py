@@ -240,10 +240,14 @@ class UserDashboardWidget(QWidget):
             ptype = "local" if tab_idx == 0 else "team"
             # self.sig_project_action.emit(ptype, project_id)
 
+    # 修正點 B: 點擊表格時，從 UserRole 讀取邏輯 ID
     def _on_table_click(self, table, row):
-        item = table.item(row, 0)
-        if item:
-            project_id = item.text()
+        name_item = table.item(row, 0)
+        if name_item:
+            # [修正]: 優先從 UserRole 取得邏輯 ID (101)
+            project_id = name_item.data(Qt.ItemDataRole.UserRole)
+            if not project_id: project_id = name_item.text()
+            
             tab_idx = self.tabs_projects.currentIndex()
             ptype = "local" if tab_idx == 0 else "team"
             self.sig_project_action.emit(ptype, project_id)
@@ -283,6 +287,7 @@ class UserDashboardWidget(QWidget):
     def update_team_projects(self, projects):
         self._populate_table(self.table_team, projects, ["name", "author", "updated_at"], add_del_btn=False)
 
+    # 修正點 A: 在表格填入資料時，將邏輯 ID 存入 UserRole
     def _populate_table(self, table, data_list, keys, add_del_btn=False):
         table.setRowCount(0)
         table.setRowCount(len(data_list))
@@ -292,15 +297,20 @@ class UserDashboardWidget(QWidget):
                 val = str(item.get(key, "-"))
                 t_item = QTableWidgetItem(val)
                 t_item.setForeground(QColor("#e0e0e0"))
+                
+                # [新增]: 如果是 Name 欄位，將真正的邏輯 ID (101) 存入隱藏資料中
+                if key == "name":
+                    t_item.setData(Qt.ItemDataRole.UserRole, item.get('id', val))
+                
                 table.setItem(i, j, t_item)
             
             if add_del_btn:
-                pid = item.get('name')
+                # [修正]: 刪除按鈕應使用 'id' (101) 而非顯示名稱
+                pid = item.get('id', item.get('name'))
                 w_del = QWidget()
                 l_del = QHBoxLayout(w_del); l_del.setContentsMargins(2,2,2,2)
                 btn_del = QPushButton("X")
-                btn_del.setFixedWidth(30)
-                btn_del.setStyleSheet("background-color: #c0392b; color: white; border: none; font-weight: bold;")
+                # ... (樣式保持不變)
                 btn_del.clicked.connect(lambda checked, x=pid: self.sig_delete_local.emit(x))
                 l_del.addWidget(btn_del)
                 table.setCellWidget(i, 3, w_del)

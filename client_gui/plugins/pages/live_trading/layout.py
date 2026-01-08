@@ -423,38 +423,56 @@ class KLineChartWidget(QWidget):
         for item in self.indep_plots: item['info_label'].setText("")
 
     def update_data(self, data):
+        """
+        [修正]: 增加強制排序邏輯，解決 00:00 跨日 K 線停止更新問題。
+        """
         if self.is_rebuilding or self.plot_main is None or not data: return
         try:
             df = pd.DataFrame(data)
-            # SSTP Keys: ts, o, h, l, c, v
+            
+            # 1. 強化時間戳記處理
             if 'ts' in df.columns: 
+                # 強制轉換為 datetime 並處理時區/格式
                 df['ts'] = pd.to_datetime(df['ts'])
                 df.set_index('ts', inplace=True)
+                
+                # [核心修正]: 必須執行排序，確保 00:00 (隔日) 接在 23:45 之後
+                df.sort_index(inplace=True)
             
+            # 2. 欄位更名與數值轉換
             rename_map = {'o': 'Open', 'h': 'High', 'l': 'Low', 'c': 'Close', 'v': 'Volume'}
             df.rename(columns=rename_map, inplace=True)
 
             cols = ['Open', 'High', 'Low', 'Close', 'Volume']
             for c in cols:
-                if c in df.columns: df[c] = pd.to_numeric(df[c], errors='coerce')
+                if c in df.columns: 
+                    df[c] = pd.to_numeric(df[c], errors='coerce')
                 
+            # 3. 填充空值並過濾重複 (保留最新的資料)
             df[cols] = df[cols].replace(0, np.nan).ffill().bfill()
             df = df[~df.index.duplicated(keep='last')]
             
+            # 4. 重新取得欄位索引位置
             try:
-                self.idx_open = df.columns.get_loc('Open'); self.idx_high = df.columns.get_loc('High')
-                self.idx_low = df.columns.get_loc('Low'); self.idx_close = df.columns.get_loc('Close'); self.idx_volume = df.columns.get_loc('Volume')
+                self.idx_open = df.columns.get_loc('Open')
+                self.idx_high = df.columns.get_loc('High')
+                self.idx_low = df.columns.get_loc('Low')
+                self.idx_close = df.columns.get_loc('Close')
+                self.idx_volume = df.columns.get_loc('Volume')
             except KeyError: pass 
             
             self.df_kbars = df
+            # 更新顯示用時間字串列表
             self.timestamps = df.index.strftime('%Y-%m-%d %H:%M:%S').tolist()
             
+            # 5. 重新繪圖並確保視窗捲動到最末端
             self.draw_kline()
             self.draw_indicators()
             self.update_text_content(len(df) - 1)
             self.dirty = False 
             
-        except Exception as e: print(f"[Chart] Update Error: {e}")
+        except Exception as e: 
+            print(f"[Chart Rebuild Error at {datetime.datetime.now()}]: {e}")
 
     def process_tick(self, price, volume):
         if self.is_rebuilding or self.plot_main is None or self.df_kbars.empty or price <= 0 or self.idx_close is None: return
