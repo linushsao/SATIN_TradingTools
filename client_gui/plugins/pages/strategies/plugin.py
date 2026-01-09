@@ -596,8 +596,18 @@ class StrategiesPlugin(ISateGuiPlugin):
         pid = self.widget.config_form.current_editing_id
         if pid:
             p = os.path.join(self.context.get_workspace_path(), pid, n)
-            with open(p, 'w', encoding='utf-8') as f:
-                f.write(c)
+            try:
+                # 執行寫入檔案
+                with open(p, 'w', encoding='utf-8') as f:
+                    f.write(c)
+                
+                # [修正]: 儲存成功後，通知 UI 組件重設狀態
+                self.widget.mark_file_saved()
+                self.context.log("INFO", f"File saved successfully: {n}")
+                
+            except Exception as e:
+                self.context.log("ERROR", f"Failed to save file {n}: {e}")
+                self.context.show_message("儲存失敗", f"無法存檔: {e}", "error")
 
     def _on_save_project(self, data):
         pid = data.get('id')

@@ -597,6 +597,18 @@ class StrategiesWidget(QWidget):
         if self.current_file_name:
             content = self.code_editor.get_content()
             self.sig_save_file.emit(self.current_file_name, content)
+
+    def mark_file_saved(self):
+        """
+        修正版：手動重置修改狀態，並強制更新 UI 樣式。
+        """
+        if self.code_editor.document():
+            # 1. 重置 Qt 文件內部的修改標記
+            self.code_editor.document().setModified(False)
+            
+        # 2. 【關鍵】直接呼叫 UI 更新邏輯，強制將按鈕恢復原狀
+        # 這樣即使 code_editor 沒有發出訊號，按鈕也會被修復
+        self._on_editor_dirty_changed(False)
     
     def load_data(self, df, code="--", freq="1m"):
         """
