@@ -106,6 +106,13 @@ class BaseProxy:
         """清理訊息以符合 CSV 格式 (移除換行與逗號)"""
         return str(msg).replace(",", ";").replace("\n", " ").replace("\r", "")
 
+    def call(self, cmd: str, args: dict = None) -> dict:
+        """
+        公用命令發送介面 (Public API)。
+        封裝內部的 _send_cmd 邏輯，供外掛模組 (Plugins) 呼叫。
+        """
+        return self._send_cmd(cmd, args)
+
     def _send_cmd(self, cmd: str, args: dict = None) -> dict:
         if args is None: args = {}
         
