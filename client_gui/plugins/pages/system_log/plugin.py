@@ -12,6 +12,9 @@ import json
 import zipfile
 import shutil
 import importlib 
+import platform    # [修正] 必須匯入 platform 以偵測作業系統
+import subprocess  # [修正] 必須匯入 subprocess 以支援非 Windows 系統開啟資料夾
+
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
@@ -77,7 +80,9 @@ class SystemLogPlugin(ISateGuiPlugin):
         self.widget.dashboard.sig_export_project.connect(self._on_export_project)
         self.widget.dashboard.sig_remove_project.connect(self._on_remove_project_btn)
         
-        self.widget.dashboard.sig_delete_local.connect(self._on_delete_local)
+        #self.widget.dashboard.sig_delete_local.connect(self._on_delete_local)
+        self.widget.dashboard.sig_open_project_folder.connect(self._on_open_project_folder)
+        
         
         self.context.log("INFO", "Project Monitor 3.1 (Strict WS) Initialized.")
         
@@ -207,17 +212,37 @@ class SystemLogPlugin(ISateGuiPlugin):
             else:
                 self.context.show_message("Create Failed", result, "error")
 
-    def _on_delete_local(self, project_id):
-        reply = QMessageBox.question(self.widget, "Delete Project", 
-                                     f"Permanently delete local project '{project_id}'?\n(Files will be removed)",
-                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        if reply == QMessageBox.StandardButton.Yes:
-            ok, msg = self.project_mgr.delete_project(project_id, delete_files=True)
-            if ok:
-                self.context.log("INFO", f"Project '{project_id}' deleted.")
-                self._refresh_projects()
-            else:
-                self.context.show_message("Delete Failed", msg, "error")
+    # def _on_delete_local(self, project_id):
+        # reply = QMessageBox.question(self.widget, "Delete Project", 
+                                     # f"Permanently delete local project '{project_id}'?\n(Files will be removed)",
+                                     # QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        # if reply == QMessageBox.StandardButton.Yes:
+            # ok, msg = self.project_mgr.delete_project(project_id, delete_files=True)
+            # if ok:
+                # self.context.log("INFO", f"Project '{project_id}' deleted.")
+                # self._refresh_projects()
+            # else:
+                # self.context.show_message("Delete Failed", msg, "error")
+
+    def _on_open_project_folder(self, project_id):
+        """實作以檔案管理員開啟專案路徑"""
+        # 透過 ProjectManager 取得該專案的絕對路徑 
+        src_path = self.project_mgr.get_project_path(project_id)
+        
+        if not src_path or not os.path.exists(src_path):
+            self.context.show_message("Error", f"Project path not found: {src_path}", "error")
+            return
+
+        self.context.log("INFO", f"Opening project folder: {src_path}")
+        
+        # 使用系統預設管理器開啟資料夾
+        path = os.path.normpath(src_path)
+        if platform.system() == "Windows":
+            os.startfile(path)
+        elif platform.system() == "Darwin": # macOS
+            subprocess.Popen(["open", path])
+        else: # Linux
+            subprocess.Popen(["xdg-open", path])
 
     def _on_import_project(self):
         file_path, _ = QFileDialog.getOpenFileName(self.widget, "Import Project", "", "Zip Files (*.zip)")

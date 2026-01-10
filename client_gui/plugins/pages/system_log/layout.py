@@ -41,7 +41,8 @@ class UserDashboardWidget(QWidget):
     sig_import_project = pyqtSignal()
     sig_export_project = pyqtSignal()
     sig_remove_project = pyqtSignal() # General Remove (Selected)
-    sig_delete_local = pyqtSignal(str) # Specific Delete button
+    #sig_delete_local = pyqtSignal(str) # Specific Delete button
+    sig_open_project_folder = pyqtSignal(str) # [新增] 用於通知 Plugin 開啟資料夾
     
     # Settings Signal (Removed from UI, kept for compatibility if needed, but unused)
     # sig_project_settings = pyqtSignal() 
@@ -149,7 +150,7 @@ class UserDashboardWidget(QWidget):
         self.tabs_projects.setStyleSheet("QTabWidget::pane { border: 0; }")
         
         # Tab 1: Local Projects
-        self.table_local = self._create_project_table(["Name", "Path", "Updated", "Del"])
+        self.table_local = self._create_project_table(["Open", "Name", "Path", "Updated"])
         self.tabs_projects.addTab(self.table_local, "[Local Projects]")
         
         # Tab 2: Team Projects
@@ -282,39 +283,43 @@ class UserDashboardWidget(QWidget):
         self.lbl_stat_running.setText(f"Active Strategies: {active_count}")
 
     def update_local_projects(self, projects):
-        self._populate_table(self.table_local, projects, ["name", "path", "updated_at"], add_del_btn=True)
+        self._populate_table(self.table_local, projects, ["Open", "name", "path", "updated_at"])
 
     def update_team_projects(self, projects):
-        self._populate_table(self.table_team, projects, ["name", "author", "updated_at"], add_del_btn=False)
+        self._populate_table(self.table_team, projects, ["name", "author", "updated_at"])
 
-    # 修正點 A: 在表格填入資料時，將邏輯 ID 存入 UserRole
-    def _populate_table(self, table, data_list, keys, add_del_btn=False):
+    def _populate_table(self, table, data_list, keys):
         table.setRowCount(0)
         table.setRowCount(len(data_list))
         for i, item in enumerate(data_list):
+            pid = item.get('id', item.get('name')) # 取得邏輯 ID 
+            
             for j, key in enumerate(keys):
-                if key == "Del": continue 
+                if key == "Open":
+                    # [新增] 在第一欄建立 Open 按鈕
+                    w_open = QWidget()
+                    l_open = QHBoxLayout(w_open)
+                    l_open.setContentsMargins(2, 2, 2, 2)
+                    btn_open = QPushButton("Open")
+                    btn_open.setStyleSheet("""
+                        QPushButton { background-color: #27ae60; color: white; font-weight: bold; border-radius: 2px; }
+                        QPushButton:hover { background-color: #2ecc71; }
+                    """)
+                    	# 按下時發射訊號，帶入專案 ID 
+                    btn_open.clicked.connect(lambda checked, x=pid: self.sig_open_project_folder.emit(x))
+                    l_open.addWidget(btn_open)
+                    table.setCellWidget(i, j, w_open)
+                    continue
+
                 val = str(item.get(key, "-"))
                 t_item = QTableWidgetItem(val)
                 t_item.setForeground(QColor("#e0e0e0"))
                 
-                # [新增]: 如果是 Name 欄位，將真正的邏輯 ID (101) 存入隱藏資料中
+                	# [新增]: 如果是 Name 欄位，將真正的邏輯 ID (101) 存入隱藏資料中
                 if key == "name":
                     t_item.setData(Qt.ItemDataRole.UserRole, item.get('id', val))
                 
                 table.setItem(i, j, t_item)
-            
-            if add_del_btn:
-                # [修正]: 刪除按鈕應使用 'id' (101) 而非顯示名稱
-                pid = item.get('id', item.get('name'))
-                w_del = QWidget()
-                l_del = QHBoxLayout(w_del); l_del.setContentsMargins(2,2,2,2)
-                btn_del = QPushButton("X")
-                # ... (樣式保持不變)
-                btn_del.clicked.connect(lambda checked, x=pid: self.sig_delete_local.emit(x))
-                l_del.addWidget(btn_del)
-                table.setCellWidget(i, 3, w_del)
-
 # ------------------------------------------------------------------------------
 # 2. Event Log Table (Bottom Left)
 # ------------------------------------------------------------------------------
