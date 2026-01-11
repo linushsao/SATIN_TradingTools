@@ -60,6 +60,9 @@ class LiveTradingPlugin(ISateGuiPlugin):
         
         self.widget.sig_contract_selected.connect(self.on_contract_selected)
         self.widget.strategy_table.sig_toggle_strategy.connect(self.on_toggle_strategy)
+        # [修正]: 連結 Undeploy 信號
+        self.widget.strategy_table.sig_undeploy_strategy.connect(self.on_undeploy_strategy)
+        
         self.widget.strategy_table.cellDoubleClicked.connect(self.on_table_double_click)
         
         self.widget.sig_config_indicators.connect(self.on_config_indicators)
@@ -295,6 +298,23 @@ class LiveTradingPlugin(ISateGuiPlugin):
                 self.context.log("INFO", f"Strategy {sid}: {msg}")
         except Exception as e:
             self.context.log("ERROR", f"Toggle failed: {e}")
+
+    def on_undeploy_strategy(self, sid):
+        """
+        [新增]: 處理將策略從執行佇列移除的請求 [修正 7-2-2]
+        """
+        try:
+            strat_svc = self.context.get_service_by_capability(CAP_STRATEGY_HOST)
+            if strat_svc:
+                # 呼叫 TradingProxy 的 delete_strategy (對應後端 STR_DEL)
+                msg = strat_svc.delete_strategy(sid)
+                self.context.log("INFO", f"Strategy {sid} Undeployed: {msg}")
+                # 立即重新整理列表
+                self.refresh_strategies()
+            else:
+                self.context.log("ERROR", "Undeploy failed: Strategy host service not found.")
+        except Exception as e:
+            self.context.log("ERROR", f"Undeploy Exception: {e}")
 
     def on_table_double_click(self, row, col):
         pass

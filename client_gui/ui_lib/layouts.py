@@ -54,9 +54,13 @@ class LogViewer(QTextEdit):
 
 class StrategyTable(QTableWidget):
     sig_toggle_strategy = pyqtSignal(int)
+    sig_remove_strategy = pyqtSignal(str)
+    sig_undeploy_strategy = pyqtSignal(int)
+    
     def __init__(self):
         super().__init__()
-        self.columns = ["No.", "Status", "Name", "Pos", "Last", "PnL", "Entry", "SL", "TP", "Action"]
+        # [修正]: 增加 Undeploy 欄位
+        self.columns = ["No.", "Status", "Name", "Pos", "Last", "PnL", "Entry", "SL", "TP", "Action", "Undeploy"]
         self.setColumnCount(len(self.columns))
         self.setHorizontalHeaderLabels(self.columns)
         self.verticalHeader().setVisible(False)
@@ -65,51 +69,60 @@ class StrategyTable(QTableWidget):
         self.setAlternatingRowColors(True)
         header = self.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        self.button_cache = {} 
-    def update_data(self, strategies):
-        active_strats = [s for s in strategies if s.get('is_active', True)]
-        if self.rowCount() != len(active_strats):
-            self.setRowCount(len(active_strats))
-            self.button_cache = {} 
-        for row, s in enumerate(active_strats):
-            sid = s['id']
-            def set_item(col, text, color=None):
-                item = self.item(row, col)
-                if not item: item = QTableWidgetItem(); self.setItem(row, col, item)
-                item.setText(str(text))
-                if color: item.setForeground(QColor(color))
-                else: item.setForeground(QColor("black")) 
-            set_item(0, row + 1)
-            state_text = "RUN" if s['running'] else "STOP"
-            state_color = "#4ec9b0" if s['running'] else "#f44747"
-            set_item(1, state_text, state_color)
-            name_str = s['name'].split('(')[0]
-            if 'Trailing' in s['name']: name_str += " (Trail)"
-            set_item(2, name_str)
-            pos = s['pos']
-            pos_color = "red" if pos > 0 else ("green" if pos < 0 else None)
-            set_item(3, pos, pos_color)
-            set_item(4, f"{s['last']:.0f}")
-            pnl = 0
-            if s['pos'] != 0 and s['last'] > 0 and s['avg_cost'] > 0:
-                diff = s['last'] - s['avg_cost']; 
-                if s['pos'] < 0: diff = -diff
-                pnl = diff * abs(s['pos'])
-            pnl_color = "red" if pnl > 0 else ("green" if pnl < 0 else None)
-            set_item(5, f"{pnl:+.0f}" if s['pos']!=0 else "-", pnl_color)
-            entry = s.get('entry', 0); sl = s.get('sl', 0); tp = s.get('tp', 0)
-            set_item(6, f"{entry:.0f}" if entry else "-"); set_item(7, f"{sl:.0f}" if sl else "-"); set_item(8, f"{tp:.0f}" if tp else "-")
-            target_text = "Stop" if s['running'] else "Start"
-            target_bg = "#f44747" if s['running'] else "#4ec9b0"
-            cache_key = f"{row}_{target_text}"
-            if self.button_cache.get(row) != cache_key:
-                btn = QPushButton(target_text)
-                btn.setStyleSheet(f"background-color: {target_bg}; color: black; font-weight: bold;")
-                btn.clicked.connect(lambda checked, x=sid: self.sig_toggle_strategy.emit(x))
-                self.setCellWidget(row, 9, btn)
-                self.button_cache[row] = cache_key
+        self.setColumnWidth(0, 40)
+        self.setColumnWidth(1, 80)
+        self.setColumnWidth(2, 150)
+        # 固定 Action 與 Undeploy 寬度
+        self.setColumnWidth(9, 70)
+        self.setColumnWidth(10, 80)
+        
+    def update_data(self, data_list):
+        """
+        [修正]: 實作 Start/Stop 切換邏輯與 Undeploy 按鈕產生
+        """
+        self.setRowCount(len(data_list))
+        for i, s in enumerate(data_list):
+            sid = s.get('id', 0)
+            is_running = s.get('running', False)
+            
+            # 1-9 欄位填充 (略過，維持原邏輯)
+            self.setItem(i, 0, QTableWidgetItem(str(sid)))
+            
+            status_item = QTableWidgetItem("RUNNING" if is_running else "STOPPED")
+            status_item.setForeground(QColor("green") if is_running else QColor("gray"))
+            self.setItem(i, 1, status_item)
+            
+            self.setItem(i, 2, QTableWidgetItem(str(s.get('name', ''))))
+            self.setItem(i, 3, QTableWidgetItem(str(s.get('pos', 0))))
+            self.setItem(i, 4, QTableWidgetItem(f"{s.get('last', 0):.1f}"))
+            
+            # PnL 顏色標註
+            pnl = s.get('pnl', 0)
+            pnl_item = QTableWidgetItem(f"{pnl:.0f}")
+            if pnl > 0: pnl_item.setForeground(QColor("red"))
+            elif pnl < 0: pnl_item.setForeground(QColor("green"))
+            self.setItem(i, 5, pnl_item)
+            
+            self.setItem(i, 6, QTableWidgetItem(str(s.get('entry', 0))))
+            self.setItem(i, 7, QTableWidgetItem(str(s.get('sl', 0))))
+            self.setItem(i, 8, QTableWidgetItem(str(s.get('tp', 0))))
 
+            # 9. Action 按鈕: Start/Stop 切換 [修正 7-2-1]
+            btn_action = QPushButton("Stop" if is_running else "Start")
+            if is_running:
+                btn_action.setStyleSheet("background-color: #442222; color: white; font-weight: bold;")
+            else:
+                btn_action.setStyleSheet("background-color: #224422; color: white; font-weight: bold;")
+            
+            # 綁定信號
+            btn_action.clicked.connect(lambda _, _id=sid: self.sig_toggle_strategy.emit(_id))
+            self.setCellWidget(i, 9, btn_action)
+
+            # 10. Undeploy 按鈕: 移除佇列 [修正 7-2-2]
+            btn_undeploy = QPushButton("Undeploy")
+            btn_undeploy.setStyleSheet("background-color: #333333; color: #aaaaaa;")
+            btn_undeploy.clicked.connect(lambda _, _id=sid: self.sig_undeploy_strategy.emit(_id))
+            self.setCellWidget(i, 10, btn_undeploy)           
 class HistoryDownloadDialog(QDialog):
     def __init__(self, contracts=None, parent=None): 
         super().__init__(parent)
