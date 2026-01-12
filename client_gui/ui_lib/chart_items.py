@@ -88,6 +88,26 @@ class CandlestickItem(pg.GraphicsObject):
                 p.drawRect(QRectF(t - w, open, w * 2, body_h))
         p.end()
 
+    def update_last_bar(self, t, open_val, close_val, low_val, high_val):
+        """
+        即時更新最後一根 K 棒的數據並重繪圖層。
+        """
+        # 尋找現有資料中索引值為 t 的項目 (通常是最後一個)
+        found = False
+        for i in range(len(self.data)-1, -1, -1):
+            if self.data[i][0] == t:
+                self.data[i] = (t, open_val, close_val, low_val, high_val)
+                found = True
+                break
+        
+        # 如果是全新的索引（新 K 棒誕生），則追加
+        if not found:
+            self.data.append((t, open_val, close_val, low_val, high_val))
+            
+        # 由於此元件使用 QPicture 緩存，更新數據後必須重新生成 Picture
+        self.generatePictureStatic()
+        self.update()
+
     def update_data(self, data):
         self.data = data
         self.generatePictureStatic()
