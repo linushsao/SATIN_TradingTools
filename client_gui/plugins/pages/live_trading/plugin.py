@@ -117,6 +117,13 @@ class LiveTradingPlugin(ISateGuiPlugin):
                         self._trigger_auto_download(self.current_code)
                     self._checked_codes.add(self.current_code)
 
+        # 處理 Server 端發送的策略狀態廣播
+        elif topic == "STRATEGY":
+            str_data = payload.get('data', [])
+            if str_data and self.widget:
+                # 讓表格即時反應最新的 status 與按鈕文字
+                self.widget.strategy_table.update_data(str_data)
+
     def _trigger_auto_download(self, code):
         end_date = datetime.now().strftime('%Y-%m-%d')
         start_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
@@ -291,11 +298,19 @@ class LiveTradingPlugin(ISateGuiPlugin):
             save_config(config, CONFIG_FILE)
 
     def on_toggle_strategy(self, sid):
+        """
+        處理策略 Start/Stop 切換按鈕點擊事件
+        """
         try:
             strat_svc = self.context.get_service_by_capability(CAP_STRATEGY_HOST)
             if strat_svc:
+                # 發送指令至 Server
                 msg = strat_svc.toggle_strategy(sid)
                 self.context.log("INFO", f"Strategy {sid}: {msg}")
+                
+                # [修正 4. & 5.]: 指令執行後，立即重新整理列表，使 Action 按鈕與 Status 欄位更新
+                self.refresh_strategies()
+                
         except Exception as e:
             self.context.log("ERROR", f"Toggle failed: {e}")
 
