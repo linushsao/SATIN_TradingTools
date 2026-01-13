@@ -153,21 +153,7 @@ class DatabaseManager:
             conn.close()
 
     def get_bars(self, code: str, start: str, end: str, freq: int):
-        """[修正]: 解決 NameError 並確保偵錯訊息正確輸出"""
-        import os
-        import pandas as pd
-        # 確保匯入專案專用的日誌工具
-        from shared.logging_tool import info, warn, error
-        
-        abs_db_path = os.path.abspath(self.db_path)
-        
-        info(f"[DB Diagnostic] Accessing database at: {abs_db_path}")
-        info(f"[DB Diagnostic] Query Params -> Code: {code}, Freq: {freq}, Start: {start}, End: {end}")
-
-        if not os.path.exists(abs_db_path):
-            error(f"[DB Error] Database file does not exist at {abs_db_path}")
-            return pd.DataFrame()
-            
+        """查詢指定區間 K 棒，回傳 DataFrame。"""
         conn = self._get_conn()
         try:
             query = '''
@@ -177,30 +163,13 @@ class DatabaseManager:
                 ORDER BY timestamp ASC
             '''
             df = pd.read_sql_query(query, conn, params=(code, freq, start, end))
-            
             if not df.empty:
                 df['timestamp'] = pd.to_datetime(df['timestamp'])
                 df.set_index('timestamp', inplace=True)
                 df.index.name = 'Date'
-                df.columns = [c.capitalize() for c in df.columns]
-                info(f"[DB Success] Retrieved {len(df)} bars.")
-            else:
-                # 診斷邏輯
-                diag_query = "SELECT MIN(timestamp), MAX(timestamp) FROM kbars WHERE code=? AND freq=?"
-                cursor = conn.cursor()
-                cursor.execute(diag_query, (code, freq))
-                db_range = cursor.fetchone()
-                
-                # 修正後的 warn 呼叫
-                if db_range and db_range[0]:
-                    warn(f"[DB Discovery] Target range empty. Data for '{code}' in DB exists from {db_range[0]} to {db_range[1]}")
-                else:
-                    warn(f"[DB Discovery] No data found for code '{code}' with freq {freq} in this database.")
-                    
             return df
         except Exception as e:
-            # 此處 e 現在會被正確轉發，不會再因為 'error' 未定義而再次崩潰
-            error(f"[DB Error] Get bars failed: {str(e)}")
+            error(f"[DB] Get bars error: {e}")
             return pd.DataFrame()
         finally:
             conn.close()
@@ -237,3 +206,30 @@ class DatabaseManager:
             return pd.DataFrame()
         finally:
             conn.close()
+            
+    def execute_query(self, query: str, params: tuple = ()):
+        """[新增] 通用的查詢輔助函式，解決 AttributeError"""
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(query, params)
+            return cursor.fetchall()
+        except Exception as e:
+            error(f"[DB] Query execution error: {e}")
+            return []
+        finally:
+            conn.close()
+
+    def get_min_timestamp(self, code: str, freq: int = 1):
+        """[修正] 取得特定合約最早的 K 棒時間 (注意：表名為 kbars)"""
+        res = self.execute_query(
+            "SELECT MIN(timestamp) FROM kbars WHERE code = ? AND freq = ?", (code, freq)
+        )
+        return pd.to_datetime(res[0][0]) if res and res[0][0] else None
+
+    def get_max_timestamp(self, code: str, freq: int = 1):
+        """[修正] 取得特定合約最晚的 K 棒時間"""
+        res = self.execute_query(
+            "SELECT MAX(timestamp) FROM kbars WHERE code = ? AND freq = ?", (code, freq)
+        )
+        return pd.to_datetime(res[0][0]) if res and res[0][0] else None          

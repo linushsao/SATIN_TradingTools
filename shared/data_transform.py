@@ -27,26 +27,12 @@ BASE_FREQ = 15 # K-bar base frequency (minutes) - Default 15 minutes
 
 def resample_kbar(df_1min, freq_min):
     """Resamples a 1-minute DataFrame to the target frequency."""
-    # debug(f"[ENTER] {sys._getframe(0).f_code.co_name}", print_to_console=False)
+    debug(f"[ENTER] {sys._getframe(0).f_code.co_name}", print_to_console=False)
     
     if freq_min == 1:
         return df_1min
-
-    # 建立副本，避免修改到原始 df (預防 SettingWithCopyWarning)
-    df_working = df_1min.copy()
-
-    # 1. 確保 Date 欄位是 datetime 物件
-    # 如果 Date 已經是 Index，這行會報錯，所以加個檢查
-    if 'Date' in df_working.columns:
-        df_working['Date'] = pd.to_datetime(df_working['Date'])
-        # 2. 將 Date 設定為 Index
-        df_working = df_working.set_index('Date')
-    elif not isinstance(df_working.index, pd.DatetimeIndex):
-        # 如果 Date 不在 Columns，檢查 Index 是不是時間，如果不是就轉換
-        df_working.index = pd.to_datetime(df_working.index)
         
-    # 3. 執行重採樣
-    resampled_data = df_working.resample(f'{freq_min}T').agg({  # 'T' 或 'min' 均可
+    resampled_data = df_1min.resample(f'{freq_min}min').agg({
         'Open': 'first',
         'High': 'max',
         'Low': 'min',
