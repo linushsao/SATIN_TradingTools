@@ -1,0 +1,22 @@
+{
+    "service_name": "StrategyRepoService",
+    "storage_dir": "data/storage",
+    "zmq": {
+        "bind_ip": "127.0.0.1",
+        "pub_port": 5561,
+        "rep_port": 5560
+    },
+    "capabilities": [
+        "CAP_REPO_STORAGE"
+    ],
+    "environment_profile": {
+        "mode": "DEVELOPMENT",
+        "risk_level": "NONE",
+        "theme_hint": "DEFAULT",
+        "label": "Local Strategy Repo"
+    },
+    "logging": {
+        "max_bytes": 10485760,
+        "backup_count": 5
+    }
+}

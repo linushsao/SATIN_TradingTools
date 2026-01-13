@@ -1,0 +1,16 @@
+{
+    "1": {
+        "is_running": true,
+        "position_qty": 0,
+        "avg_cost": 0.0,
+        "trailing_active": false,
+        "trailing_max_profit": 0.0,
+        "profit_retention_rate": 0.0,
+        "current_retention_rate": 0.0,
+        "total_realized_pnl": 0.0,
+        "entry_price": 0,
+        "sl_price": 0,
+        "tp_price": 0,
+        "direction": ""
+    }
+}

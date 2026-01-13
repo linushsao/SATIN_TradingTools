@@ -1,0 +1,109 @@
+{
+    "groups": [
+        {
+            "title": "Basic Info",
+            "fields": [
+                {
+                    "key": "name", 
+                    "label": "Name", 
+                    "type": "string", 
+                    "default": "New_Strategy"
+                },
+                {
+                    "key": "file_name", 
+                    "label": "Script File", 
+                    "type": "dynamic_select", 
+                    "source": "strategy_files",
+                    "required": true
+                },
+                {
+                    "key": "contract_code", 
+                    "label": "Contract", 
+                    "type": "dynamic_select", 
+                    "source": "contracts",
+                    "required": true
+                },
+                {
+                    "key": "account_id", 
+                    "label": "Account", 
+                    "type": "dynamic_select", 
+                    "source": "accounts",
+                    "required": true
+                }
+				
+            ]
+        },
+        {
+            "title": "Execution Logic",
+            "fields": [
+                {
+                    "key": "frequency", 
+                    "label": "Freq (min)", 
+                    "type": "integer", 
+                    "default": 15, 
+                    "min": 1, 
+                    "max": 60
+                },
+                {
+                    "key": "max_order_qty", 
+                    "label": "Max Order Qty", 
+                    "type": "integer", 
+                    "default": 1, 
+                    "min": 1
+                },
+                {
+                    "key": "max_position_qty", 
+                    "label": "Max Pos Qty", 
+                    "type": "integer", 
+                    "default": 1, 
+                    "min": 1
+                },
+                {
+                    "key": "max_slippage", 
+                    "label": "Max Slippage", 
+                    "type": "integer", 
+                    "default": 5
+                },
+                {
+                    "key": "chase_buffer", 
+                    "label": "Chase Buffer", 
+                    "type": "integer", 
+                    "default": 1
+                },
+                {
+                    "key": "execution_mode", 
+                    "label": "Exec Mode", 
+                    "type": "select", 
+                    "options": ["Monitor", "TouchOrder"], 
+                    "default": "Monitor"
+                }
+            ]
+        },
+        {
+            "title": "Risk & Control",
+            "fields": [
+                {
+                    "key": "profit_retention_rate", 
+                    "label": "Profit Retention", 
+                    "type": "float", 
+                    "default": 0.66, 
+                    "step": 0.01,
+                    "min": 0.1,
+                    "max": 1.0
+                },
+                {
+                    "key": "auto_restart", 
+                    "label": "Auto Restart", 
+                    "type": "boolean", 
+                    "default": false
+                },
+                {
+                    "key": "is_active", 
+                    "label": "Active", 
+                    "type": "boolean", 
+                    "default": true
+                }
+            ]
+        }
+    ]
+}

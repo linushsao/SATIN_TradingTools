@@ -1,0 +1,132 @@
+{
+    "api_key_path": ".config/api_key.txt",
+    "secret_key_path": ".config/secret_key.txt",
+    "db_path": "data/market_data.db",
+    "last_start_date": "2025-12-06",
+    "last_end_date": "2025-12-06",
+    "last_save_frequency": 15,
+    "debug_mode": true,
+    "ticks_save_enabled": true,
+    "system_ma_period": 20,
+    "min_display_bars": 1600,
+    "page_display_bars": 200,
+    "active_frequencies": [
+        1,
+        5,
+        15,
+        30,
+        60
+    ],
+    "user_role": "DEVELOPER",
+    "live_k_bar_plugins": [
+        "bollinger_bands.py",
+        "simple_ma.py"
+    ],
+    "live_independent_plots": [
+        "volume_plot.py",
+        "example_macd.py",
+        "rsi_plot.py"
+    ],
+    "backtest_k_bar_plugins": [
+        "bt_cost_line.py",
+        "bt_strategy_ma.py"
+    ],
+    "backtest_independent_plots": [
+        "bt_equity.py",
+        "bt_mdd.py"
+    ],
+    "strategy_k_bar_plugins": [],
+    "strategy_independent_plots": [],
+    "last_strategy_source": null,
+    "last_strategy_path": null,
+    "last_futures_contract": "TXF",
+    "auto_login": true,
+    "last_login_mode": "2",
+    "logging": {
+        "max_bytes": 10485760,
+        "backup_count": 5
+    },
+    "service_name": "TradingEngine",
+    "enabled_adapters": [
+        "shioaji"
+    ],
+    "active_adapter": "shioaji",
+    "adapters": {
+        "shioaji": {
+            "module_path": "libs.adapters.shioaji_adapter",
+            "class_name": "ShioajiAdapter",
+            "config": {
+                "api_key_path": ".config/shioaji/shioaji_api_key.txt",
+                "secret_key_path": ".config/shioaji/shioaji_secret_key.txt",
+                "ca_path": ".config/shioaji/Sinopac.pfx",
+                "ca_passwd_path": ".config/shioaji/shioaji_ca_passwd.txt"
+            }
+        },
+        "fubon": {
+            "module_path": "libs.adapters.fubon_adapter",
+            "class_name": "FubonAdapter",
+            "config": {
+                "user_id_path": ".config/fubon/fubon_user_id.txt",
+                "password_path": ".config/fubon/fubon_password.txt",
+                "cert_path": ".config/fubon/CAFubon/Q120566003/Q120566003.pfx",
+                "cert_pass_path": ".config/fubon/fubon_cert_pass.txt"
+            }
+        }
+    },
+    "zmq": {
+        "bind_ip": "127.0.0.1",
+        "pub_port": 5556,
+        "rep_port": 5557
+    },
+    "capabilities": [
+        "CAP_MARKET_DATA",
+        "CAP_TRADE_EXEC",
+        "CAP_ACCOUNT_INFO",
+        "CAP_HISTORICAL_DATA",
+        "CAP_STRATEGY_HOST"
+    ],
+    "environment_profile": {
+        "mode": "SIMULATION",
+        "risk_level": "LOW",
+        "theme_hint": "GREEN_SAFE",
+        "label": "Multi-Broker Simulation"
+    },
+    "supported_products": [
+        "TXF",
+        "MXF",
+        "TMF"
+    ],
+    "contract_multipliers": {
+        "TXF": 200.0,
+        "MXF": 50.0,
+        "TMF": 10.0,
+        "MTX": 50.0,
+        "GTF": 50.0,
+        "TE": 4000.0,
+        "TF": 1000.0
+    },
+    "strategy_groups": [
+        {
+            "id": 1,
+            "name": "Demo_Project",
+            "file_name": "strategy_Demo_Project.py",
+            "frequency": 15,
+            "max_order_qty": 1,
+            "max_position_qty": 1,
+            "contract_code": "TXFR1",
+            "account_id": "shioaji:1794887",
+            "max_slippage": 5,
+            "chase_buffer": 0,
+            "profit_retention_rate": 0.0,
+            "auto_restart": false,
+            "is_active": true,
+            "execution_mode": "Monitor"
+        }
+    ],
+    "system_settings": {
+        "timezone": {
+            "mode": "MANUAL",
+            "offset": 8
+        }
+    }
+}
