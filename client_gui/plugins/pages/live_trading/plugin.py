@@ -45,6 +45,8 @@ class LiveTradingPlugin(ISateGuiPlugin):
         return "Live Trading"
 
     def initialize(self, context):
+        from PyQt6.QtCore import QTimer
+        
         self.context = context
         self.widget = LiveTradingWidget()
         
@@ -70,11 +72,7 @@ class LiveTradingPlugin(ISateGuiPlugin):
         self.widget.sig_download_history.connect(self.on_download_history)
         self.widget.sig_manage_contracts.connect(self.on_manage_contracts)
         
-        # [FIX] Fail-Safe Initialization
-        try:
-            self.refresh_data()
-        except Exception as e:
-            self.context.log("WARN", f"[Live] Initial data fetch failed (Offline?): {e}")
+        QTimer.singleShot(2000, self.refresh_data)
 
     def get_widget(self):
         return self.widget

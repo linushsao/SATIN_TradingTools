@@ -63,13 +63,6 @@
                     "pub_port": 5556,
                     "req_timeout_ms": 15000,
                     "auto_connect": true
-                },
-                {
-                    "name": "Strategy Repo",
-                    "host": "127.0.0.1",
-                    "rep_port": 5560,
-                    "pub_port": 5561,
-                    "auto_connect": true
                 }
             ]
         }
