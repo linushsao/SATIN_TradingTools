@@ -555,27 +555,8 @@ class KLineChartWidget(QWidget):
             for item in self.indep_plots: 
                 self.exec_plugin_callback(item['name'], local_vars, item['plot'], item['drawings'], item['data_series'], is_overlay=False)
         
-        if self.context:
-            try:
-                from shared.capabilities import CAP_STRATEGY_HOST
-                strat_svc = self.context.get_service_by_capability(CAP_STRATEGY_HOST)
-                
-                if strat_svc:
-                    str_status = strat_svc.get_strategy_status()
-                    target_strat = next((s for s in str_status if s.get('contract') == self.current_code and s.get('running')), None)
-                    if not target_strat:
-                        target_strat = next((s for s in str_status if s.get('contract') == self.current_code), None)
-                    
-                    if target_strat:
-                        sid = str(target_strat.get('id'))
-                        if self._prepare_remote_core(sid):
-                            view_code = self.context.get_strategy_view_code(sid)
-                            if view_code:
-                                self._exec_view_code(view_code, local_vars, self.plot_main, self.main_drawings)
-            except Exception: pass
-
         total = len(self.df_kbars); start = max(0, total - self.display_bars); self.update_views(start, total)
-
+        
     def update_views(self, start_idx, total_bars):
         visible_df = self.df_kbars.iloc[start_idx:]
         if not visible_df.empty:

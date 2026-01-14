@@ -64,6 +64,16 @@ class TradingProxy(BaseProxy):
         """
         return self._send_cmd("GET_POSITIONS").get("data", [])
 
+    def get_available_instances(self) -> list:
+        """
+        [重構]: 直接從 Trading Service 獲取目前記憶體中運作的實例 ID 清單。
+        解除原先透過 Context 轉向 Repo 請求檔案列表的依賴。
+        """
+        resp = self.get_strategy_status() # 呼叫現有的 STR_STATUS 指令
+        if isinstance(resp, list):
+            return [str(s.get('id')) for s in resp]
+        return []
+
     def get_account_info(self) -> dict:
         """
         [NEW] 取得帳戶權益 (SSTP)
