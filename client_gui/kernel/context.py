@@ -242,8 +242,52 @@ class SateClientContext:
             return ""
 
     def get_strategy_view_code(self, strategy_id: str, force_refresh=False) -> str:
-        path = f"projects/{strategy_id}/view.py"
-        return self.get_file_content(path, force_refresh)
+        """
+        [修正] 將請求路徑從 projects/{id}/ 修正為 service_repo/instance_{id}/。
+        並且除非使用者手動觸發還原 (force_refresh=True)，否則不執行遠端下載。
+        """
+        # 修正後的路徑：指向 service_trading 產生的災難還原備份區
+        path = f"service_repo/instance_{strategy_id}/view.py"
+        
+        if force_refresh:
+            return self.get_file_content(path, force_refresh=True)
+            
+        # 平時僅嘗試從本地快取讀取，確保啟動流程不被網路請求阻塞
+        return self.file_cache.get(path, "")
+
+    def recover_project_from_remote(self, strategy_id: str):
+        """
+        [新增功能] 手動災難還原：從 Service 端的備份倉庫下載該實例的所有執行副本並存入開發區。
+        """
+        import os
+        # 定義需要找回的核心檔案
+        files_to_recover = ["strategy.py", "strategy_core.py", "view.py", "instance_config.json"]
+        results = {}
+        
+        ws = self.get_workspace_path()
+        local_dir = os.path.join(ws, str(strategy_id))
+        
+        if not os.path.exists(local_dir):
+            os.makedirs(local_dir)
+
+        for f_name in files_to_recover:
+            # 遠端路徑映射至 service_repo/instance_{id}/
+            remote_path = f"service_repo/instance_{strategy_id}/{f_name}"
+            
+            try:
+                # 執行強制下載，更新本地開發區內容
+                content = self.get_file_content(remote_path, force_refresh=True)
+                if content:
+                    local_path = os.path.join(local_dir, f_name)
+                    with open(local_path, 'w', encoding='utf-8') as f_obj:
+                        f_obj.write(content)
+                    results[f_name] = "SUCCESS"
+                else:
+                    results[f_name] = "NOT_FOUND"
+            except Exception as e:
+                results[f_name] = f"ERROR: {str(e)}"
+                
+        return results
 
     def log(self, level: str, message: str):
         if hasattr(self._main_window, 'plugins'):

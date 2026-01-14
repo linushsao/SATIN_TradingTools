@@ -69,6 +69,37 @@ class StrategiesPlugin(ISateGuiPlugin):
         self.widget.chart_view.exec_plugin_callback = self._execute_plugin_from_appdata
         self.refresh_ui()
 
+    def _on_remote_recovery(self):
+        """
+        [新增] 處理手動還原：彈出確認視窗，並調用 SateClientContext 執行下載。
+        """
+        from PyQt6.QtWidgets import QMessageBox
+        
+        # 取得當前列表選取的專案 ID
+        pid = self.widget.config_form.current_editing_id #
+        if not pid:
+            self.context.show_message("提示", "請先點選 Projects 列表中的專案。", "warn")
+            return
+
+        # 執行二次確認
+        reply = QMessageBox.question(
+            self.widget, "遠端還原確認", 
+            f"確定要從 Service 端下載專案 [ID: {pid}] 的執行副本嗎？\n注意：這會將 Service 備份區的檔案直接覆蓋您本地開發區內容！",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            # 執行還原並刷新 UI
+            results = self.context.recover_project_from_remote(pid)
+            success_files = [f for f, res in results.items() if res == "SUCCESS"]
+            
+            if success_files:
+                self.context.show_message("還原完成", f"已成功從遠端備份區找回：\n{', '.join(success_files)}")
+                self.refresh_ui() #
+                self._on_local_select(pid) 
+            else:
+                self.context.show_message("還原失敗", "遠端倉庫 service_repo 找不到該專案副本。", "error")
+
     def _on_stop_strategy(self, pid):
         """
         發送停止指令至伺服器端。

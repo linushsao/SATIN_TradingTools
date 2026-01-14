@@ -234,13 +234,18 @@ class StrategyExecutor:
         buffer_size = int(log_conf.get('buffer_size', 20))
         self.event_buffer = deque(maxlen=buffer_size)
         self._load_strategies()
-        self._restore_strategy_state()
+        #self._restore_strategy_state()
 
         self._config_dirty = False   # 這是我們新創的「便條紙」
         self._save_interval = 10     # 設定每 10 秒檢查一次
         # 啟動一個後台清潔工（線程），它會一直執行 _periodic_save_worker 函式
         threading.Thread(target=self._periodic_save_worker, daemon=True).start()
         self.trading_manager = TradingManager(self.adapters)
+
+    def resume_all_strategies(self):
+        """【新增/公開方法】：供 MainEngine 在登入後呼叫"""
+        info("[Executor] 偵測到券商已連線，開始恢復策略運行狀態...")
+        self._restore_strategy_state()
         
     def _periodic_save_worker(self):
         """【這是新函式】後台清潔工：負責定期檢查便條紙"""
@@ -306,6 +311,8 @@ class StrategyExecutor:
         info(f"[Executor] Starting Activation: {group.name}")
         
         if group.load_module():
+            # 【修正 4】：災難還原同步檢查
+            self._sync_to_service_repo(group)            
             # 【關鍵修正】：先設定運行狀態標記
             group.is_running = True 
             
@@ -321,7 +328,51 @@ class StrategyExecutor:
             group.is_running = False
             msg = f"Failed to activate strategy '{group.name}'."
             self._log_ui(msg, "ERROR")
- 
+
+    def _sync_to_service_repo(self, group):
+        """
+        [新增] 災難還原同步：確保 service_repo 存有該策略實例的完整執行副本
+        """
+        try:
+            import shutil
+            # 1. 建立 Repo 存放目錄 (以實例 ID 命名)
+            repo_dir = os.path.join('repo', f"instance_{group.id}")
+            if not os.path.exists(repo_dir):
+                os.makedirs(repo_dir)
+                info(f"[Repo] 建立新備份目錄: {repo_dir}")
+
+            # 2. 定位原始檔案實體路徑 (沿用 load_module 的路徑邏輯)
+            file_name = group.file_name
+            folder_name = file_name.replace(".py", "")
+            
+            paths_to_check = [
+                os.path.join(STRATEGY_DIR, file_name),
+                os.path.join(STRATEGY_DIR, folder_name, file_name)
+            ]
+            
+            actual_script_path = next((p for p in paths_to_check if os.path.exists(p)), None)
+            
+            if actual_script_path:
+                # A. 備份主策略腳本
+                shutil.copy2(actual_script_path, os.path.join(repo_dir, file_name))
+                
+                # B. 備份 strategy_core.py (如果存在於同目錄中)
+                core_path = os.path.join(os.path.dirname(actual_script_path), "strategy_core.py")
+                if os.path.exists(core_path):
+                    shutil.copy2(core_path, os.path.join(repo_dir, "strategy_core.py"))
+                
+                # C. 儲存當前的策略參數快照 (JSON)，供災難還原讀取
+                config_path = os.path.join(repo_dir, "instance_config.json")
+                with open(config_path, 'w', encoding='utf-8') as f:
+                    import json
+                    json.dump(group.to_dict(), f, indent=4, ensure_ascii=False)
+                    
+                debug(f"[Repo] 實例 {group.name} 的執行副本與配置已同步至 {repo_dir}")
+            else:
+                warn(f"[Repo] 找不到原始檔案，無法執行副本備份: {file_name}")
+
+        except Exception as e:
+            error(f"[Repo] 同步至 service_repo 發生異常: {e}") 
     def _save_state(self): self.state_manager.save_state(self.strategies); self._broadcast_status()
     
     def _save_config(self):

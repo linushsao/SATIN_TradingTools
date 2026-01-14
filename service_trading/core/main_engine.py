@@ -105,7 +105,9 @@ def _load_schema():
         strategy_schema = {}
 
 def _run_engine_login(simulation_mode): 
-    global adapters, config
+    
+    #global adapters, config
+    global adapters, config, strategy_executor, account_manager
     info(f"[Engine] Starting multi-broker login process. Simulation: {simulation_mode}")
     results = {}
     success_count = 0
@@ -125,7 +127,20 @@ def _run_engine_login(simulation_mode):
 
     if account_manager:
         account_manager._refresh_account_map()
-    
+
+    # if success_count > 0 and strategy_executor:
+        # strategy_executor.resume_all_strategies()
+    if success_count > 0:
+        if strategy_executor:
+            # 正常啟動流程
+            strategy_executor.resume_all_strategies()
+        else:
+            # 異常：券商連線成功，但執行器物件不存在
+            error("[Engine] 策略恢復失敗：strategy_executor 組件尚未初始化。")
+    else:
+        # 異常：沒有任何券商連線成功
+        warn("[Engine] 策略未啟動：沒有任何券商成功連線，請檢查網路或憑證。")
+        
     status = "ok" if success_count > 0 else "error"
     return {"status": status, "msg": f"Login finished. {success_count}/{len(adapters)} connected.", "details": results}
 
@@ -210,6 +225,20 @@ def handle_client_command(message: dict):
         elif cmd == "UNSUBSCRIBE": 
             if data_manager: data_manager.stop_listening()
             return {"status": "ok"}
+
+        elif cmd == "ENGINE_LOGIN":  # 或是 CMD_ENGINE_LOGIN (視常數定義而定)
+            # 取得連線模式參數，預設為模擬 (True)
+            is_sim = params.get('sim', True)
+            info(f"[Engine] 收到 Client 登入指令: {'模擬' if is_sim else '實盤'}")
+            
+            # 執行我們修正後的登入函式 (內部已包含策略恢復邏輯)
+            reply = _run_engine_login(is_sim)
+            
+            return {
+                "status": "SUCCESS" if reply['status'] == 'ok' else "ERROR",
+                "msg": reply['msg'],
+                "details": reply.get('details', {})
+            }
         
         if strategy_executor:
             if cmd == "STR_STATUS": return {"status": "ok", "data": strategy_executor.get_all_status()}

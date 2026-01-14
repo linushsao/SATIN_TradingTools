@@ -436,6 +436,7 @@ class StrategyConfigForm(QWidget):
         return d
 
 class StrategiesWidget(QWidget):
+    
     sig_preview_data = pyqtSignal(dict)
     sig_request_code_load = pyqtSignal(str)
     sig_save_project = pyqtSignal(dict)
@@ -451,6 +452,7 @@ class StrategiesWidget(QWidget):
     sig_editor_options = pyqtSignal()
     sig_deploy_req = pyqtSignal()
     sig_stop_strategy_req = pyqtSignal(str)
+    sig_recovery_req = pyqtSignal() #還原請求訊號
     
     def __init__(self):
         super().__init__()
@@ -487,6 +489,17 @@ class StrategiesWidget(QWidget):
         self.tabs_manage = QTabWidget()
         self.tab_local = QWidget()
         v_loc = QVBoxLayout(self.tab_local)
+        #---
+        h_tools = QHBoxLayout()
+        self.btn_recovery = QPushButton("Recovery from Remote") # 還原按鈕
+        # 設定為顯眼的顏色，標註為災難還原功能
+        self.btn_recovery.setStyleSheet("background-color: #2E5A88; color: white; font-weight: bold;")
+        self.btn_recovery.clicked.connect(self.sig_recovery_req.emit) 
+        
+        h_tools.addWidget(self.btn_recovery)
+        h_tools.addStretch()
+        v_loc.addLayout(h_tools)        
+        #---
         self.table_local = QTableWidget()
         self.table_local.setColumnCount(2)
         self.table_local.setHorizontalHeaderLabels(["ID", "Name"])
