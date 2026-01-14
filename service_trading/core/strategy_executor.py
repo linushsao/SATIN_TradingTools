@@ -17,8 +17,9 @@ import datetime
 import importlib.util
 import logging
 import logging.handlers
+import threading
 from collections import deque 
-from logging_tool import info, error, debug, warn
+from shared.logging_tool import info, error, debug, warn
 from trading_manager import TradingManager
 from strategy_state_manager import StrategyStateManager
 from config_manager import save_config, CONFIG_FILE
@@ -31,6 +32,7 @@ STRATEGY_DIR = 'plugins'
 STRATEGY_LOG_DIR = 'logs/strategies'
 
 class StrategyGroup:
+    
     def __init__(self, group_id, config_dict, sys_default_retention=0.66):
         self.id = group_id
         self.name = config_dict.get('name', f'Strategy_{group_id}')
@@ -64,7 +66,8 @@ class StrategyGroup:
         self.total_realized_pnl = 0.0
         self.active_sl_condition = None 
         self.logger = None
-
+        self.active_orders = set() # 用來追蹤進行中的訂單 ID
+        
     def _get_unique_filepath(self, folder, name, date_str, ext):
         """
         [新增] 根據格式產生不重複的檔案路徑：<NAME>_<日期>_<三碼流水號>.<ext>
@@ -163,50 +166,61 @@ class StrategyGroup:
         if self.logger: self.logger.log(getattr(logging, level.upper(), logging.INFO), message)
 
     def load_module(self):
-        # --- [強化] 路徑搜尋日誌 ---
+        """
+        [修正版] 實作模組隔離載入與路徑清理
+        """
+        import os, sys, importlib.util
+        
         file_name_only = self.file_name
         folder_name = file_name_only.replace(".py", "")
         
-        # 定義可能的路徑
         possible_paths = [
-            os.path.join(STRATEGY_DIR, file_name_only), # 根目錄
-            os.path.join(STRATEGY_DIR, folder_name, file_name_only) # 專屬目錄
+            os.path.join(STRATEGY_DIR, file_name_only),
+            os.path.join(STRATEGY_DIR, folder_name, file_name_only)
         ]
         
-        target_path = None
-        for path in possible_paths:
-            if os.path.exists(path):
-                target_path = path
-                break
+        target_path = next((p for p in possible_paths if os.path.exists(p)), None)
         
         if not target_path:
-            # 使用 info 讓 MainThread 也能看到
-            info(f"[Loader] ERROR: Cannot find strategy file {file_name_only} in any expected location.")
+            info(f"[Loader] ERROR: Cannot find strategy file {file_name_only}")
             return False
 
         try:
-            # 確保目錄在 sys.path
+            # 【關鍵修正 1】：使用唯一的實例 ID 作為模組名稱，防止 sys.modules 衝突
+            unique_mod_name = f"strat_instance_{self.id}"
             abs_dir = os.path.abspath(os.path.dirname(target_path))
+            
+            # 【關鍵修正 2】：保存原始路徑，確保載入後可還原，防止路徑膨脹
+            original_path = sys.path.copy()
             if abs_dir not in sys.path:
                 sys.path.insert(0, abs_dir)
             
-            info(f"[Loader] Loading module from: {target_path}")
-            
-            spec = importlib.util.spec_from_file_location(folder_name, target_path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            
-            if not hasattr(module, 'calculate'):
-                info(f"[Loader] ERROR: '{file_name_only}' missing 'calculate' function.")
-                return False
+            try:
+                info(f"[Loader] Isolated loading: {unique_mod_name} from {target_path}")
+                spec = importlib.util.spec_from_file_location(unique_mod_name, target_path)
+                module = importlib.util.module_from_spec(spec)
                 
-            self.module = module
-            return True
+                # 註冊到系統模組中以支援內部 import (例如 strategy_core)
+                sys.modules[unique_mod_name] = module
+                spec.loader.exec_module(module)
+                
+                if not hasattr(module, 'calculate'):
+                    info(f"[Loader] ERROR: '{file_name_only}' missing 'calculate' function.")
+                    return False
+                    
+                self.module = module
+                return True
+            finally:
+                # 【關鍵修正 3】：無論成功或失敗，皆還原路徑環境
+                sys.path = original_path
+                
         except Exception as e:
-            info(f"[Loader] EXCEPTION during loading '{file_name_only}': {e}")
+            import traceback
+            error(f"[Loader] EXCEPTION: {e}\n{traceback.format_exc()}")
             return False
 
 class StrategyExecutor:
+    
     def __init__(self, adapters: dict, config, data_manager, zmq_server, touch_executor=None):
         self.adapters = adapters # [MOD] Now receiving Dict[str, IBrokerAdapter]
         self.config = config
@@ -221,6 +235,34 @@ class StrategyExecutor:
         self.event_buffer = deque(maxlen=buffer_size)
         self._load_strategies()
         self._restore_strategy_state()
+
+        self._config_dirty = False   # 這是我們新創的「便條紙」
+        self._save_interval = 10     # 設定每 10 秒檢查一次
+        # 啟動一個後台清潔工（線程），它會一直執行 _periodic_save_worker 函式
+        threading.Thread(target=self._periodic_save_worker, daemon=True).start()
+        self.trading_manager = TradingManager(self.adapters)
+        
+    def _periodic_save_worker(self):
+        """【這是新函式】後台清潔工：負責定期檢查便條紙"""
+        import time
+        while True:
+            if self._config_dirty: # 如果看到便條紙 (True)
+                try:
+                    self._do_real_save() # 執行真正的存檔
+                    self._config_dirty = False # 存完後把便條紙撕掉 (False)
+                    debug("[Executor] 背景自動存檔完成。")
+                except Exception as e:
+                    error(f"[Executor] 背景存檔失敗: {e}")
+            time.sleep(self._save_interval) # 休息 10 秒再檢查下一次
+
+    def _do_real_save(self):
+        """【這是新函式】真正把資料寫進硬碟的邏輯"""
+        # 這部分是把原本 _save_config 裡面的寫入邏輯搬過來
+        groups_data = [s.to_dict() for s in self.strategies]
+        self.config['strategy_groups'] = groups_data
+        # 假設你有 save_config 這個工具函式與 CONFIG_FILE 路徑
+        # from shared.config_manager import save_config 
+        save_config(self.config, CONFIG_FILE) # 使用匯入的常數
 
     def _load_strategies(self):
         groups_data = self.config.get('strategy_groups', [])
@@ -259,44 +301,34 @@ class StrategyExecutor:
 
     def _activate_strategy(self, group, restore=False):
         """
-        [強化版] 啟動策略實例並詳細記錄初始參數
+        [修正版] 調整啟動順序，防止首筆行情丟失
         """
-        info(f"[DB] 1. 進入啟動流程: {group.name}") # 使用 info
+        info(f"[Executor] Starting Activation: {group.name}")
         
         if group.load_module():
+            # 【關鍵修正】：先設定運行狀態標記
+            group.is_running = True 
+            
+            # 隨後才啟動行情監聽
             self.data_manager.start_listening(group.contract_code)
-            info(f"[DB] 2. 監聽已啟動，準備設為 Running")
-            group.is_running = True # 確保這行有被執行
             group.start_logging()
             
-            # --- [新增] 詳細參數日誌 ---
-            startup_details = [
-                f"ID: {group.id}",
-                f"Contract: {group.contract_code}",
-                f"Account: {group.account_id}",
-                f"Mode: {group.execution_mode}",
-                f"Freq: {group.frequency}m",
-                f"OrderQty: {group.max_order_qty}",
-                f"MaxPos: {group.max_position_qty}",
-                f"Slippage: {group.max_slippage}",
-                f"AutoRestart: {group.auto_restart}"
-            ]
-            group.log("INFO", f"Startup Configuration: {', '.join(startup_details)}")
-            # --------------------------
+            info(f"[Executor] {group.name} is now ACTIVE and listening.")
             
             msg = f"Strategy '{group.name}' {'RESTORED' if restore else 'STARTED'}."
             self._log_ui(msg, "SUCCESS", group=group)
         else:
             group.is_running = False
-            msg = f"Failed to activate strategy '{group.name}'. Check console for errors."
+            msg = f"Failed to activate strategy '{group.name}'."
             self._log_ui(msg, "ERROR")
-    
+ 
     def _save_state(self): self.state_manager.save_state(self.strategies); self._broadcast_status()
-    def _save_config(self): 
-        groups_data = [s.to_dict() for s in self.strategies]
-        self.config['strategy_groups'] = groups_data
-        save_config(self.config, CONFIG_FILE)
-        self._broadcast_status()
+    
+    def _save_config(self):
+        """【修改原有的函式】現在不直接存檔了，只貼便條紙"""
+        self._config_dirty = True  # 貼上便條紙：標記為髒資料
+        self._broadcast_status()   # 仍然即時通知 UI 介面更新狀態
+        
     def _broadcast_status(self): 
         if self.server:
             status_list = [s.get_status_dict() for s in self.strategies]
@@ -381,83 +413,83 @@ class StrategyExecutor:
         pass 
 
               
-    def _record_data_snapshot(self, group, tick, data_manager):
-        """
-        將每筆 Tick 觸發後的策略狀態寫入 CSV
-        """
-        try:
-            # 取得即時行情數據
-            agg = data_manager.aggregators.get(group.frequency)
-            bar = agg.current_bar if agg and agg.current_bar else None
+    # def _record_data_snapshot(self, group, tick, data_manager):
+        # """
+        # 將每筆 Tick 觸發後的策略狀態寫入 CSV
+        # """
+        # try:
+            # # 取得即時行情數據
+            # agg = data_manager.aggregators.get(group.frequency)
+            # bar = agg.current_bar if agg and agg.current_bar else None
             
-            close_price = float(tick.close)
-            o = f"{bar['Open']:.2f}" if bar else f"{close_price:.2f}"
-            h = f"{bar['High']:.2f}" if bar else f"{close_price:.2f}"
-            l = f"{bar['Low']:.2f}" if bar else f"{close_price:.2f}"
-            c = f"{close_price:.2f}"
-            v = str(bar['Volume']) if bar else str(tick.volume)
+            # close_price = float(tick.close)
+            # o = f"{bar['Open']:.2f}" if bar else f"{close_price:.2f}"
+            # h = f"{bar['High']:.2f}" if bar else f"{close_price:.2f}"
+            # l = f"{bar['Low']:.2f}" if bar else f"{close_price:.2f}"
+            # c = f"{close_price:.2f}"
+            # v = str(bar['Volume']) if bar else str(tick.volume)
 
-            # 取得策略線位
-            lines = group.current_data if group.current_data else {}
-            entry = f"{lines.get('entry_price', 0):.2f}"
-            sl = f"{lines.get('sl_price', 0):.2f}"
-            tp = f"{lines.get('tp_price', 0):.2f}"
+            # # 取得策略線位
+            # lines = group.current_data if group.current_data else {}
+            # entry = f"{lines.get('entry_price', 0):.2f}"
+            # sl = f"{lines.get('sl_price', 0):.2f}"
+            # tp = f"{lines.get('tp_price', 0):.2f}"
 
-            # 計算未實現損益
-            pnl = 0.0
-            if group.position_qty != 0:
-                pnl = (close_price - group.avg_cost) * group.position_qty
+            # # 計算未實現損益
+            # pnl = 0.0
+            # if group.position_qty != 0:
+                # pnl = (close_price - group.avg_cost) * group.position_qty
 
-            # 寫入 CSV 檔案
-            row = f"{tick.datetime_str},{o},{h},{l},{c},{v},{entry},{sl},{tp},{group.position_qty},{group.avg_cost:.2f},{pnl:.2f}\n"
+            # # 寫入 CSV 檔案
+            # row = f"{tick.datetime_str},{o},{h},{l},{c},{v},{entry},{sl},{tp},{group.position_qty},{group.avg_cost:.2f},{pnl:.2f}\n"
             
-            with open(group.csv_path, 'a', encoding='utf-8') as f:
-                f.write(row)
+            # with open(group.csv_path, 'a', encoding='utf-8') as f:
+                # f.write(row)
                 
-        except Exception as e:
-            # 靜默處理錯誤以防阻塞交易主線程
-            pass
+        # except Exception as e:
+            # # 靜默處理錯誤以防阻塞交易主線程
+            # pass
 
-    def _record_numeric_log(self, group, tick, data_manager):
-        print(f"[DB] into _record_numeric_log")
-        """
-        產生純數字格式日誌，用於後續比對策略線位與行情之誤差。
-        格式: TIMESTAMP|O|H|L|C|V|ENTRY|SL|TP|POS|AVG_COST
-        """
-        try:
-            # 獲取當前 KBar (OHCLV)
-            agg = data_manager.aggregators.get(group.frequency)
-            if agg and agg.current_bar:
-                bar = agg.current_bar
-                o, h, l, c, v = bar['Open'], bar['High'], bar['Low'], bar['Close'], bar['Volume']
-            else:
-                # 若 Aggregator 尚未產生 KBar，則以當前 Tick 價格填充
-                o = h = l = c = float(tick.close)
-                v = int(tick.volume)
+    # def _record_numeric_log(self, group, tick, data_manager):
+        # print(f"[DB] into _record_numeric_log")
+        # """
+        # 產生純數字格式日誌，用於後續比對策略線位與行情之誤差。
+        # 格式: TIMESTAMP|O|H|L|C|V|ENTRY|SL|TP|POS|AVG_COST
+        # """
+        # try:
+            # # 獲取當前 KBar (OHCLV)
+            # agg = data_manager.aggregators.get(group.frequency)
+            # if agg and agg.current_bar:
+                # bar = agg.current_bar
+                # o, h, l, c, v = bar['Open'], bar['High'], bar['Low'], bar['Close'], bar['Volume']
+            # else:
+                # # 若 Aggregator 尚未產生 KBar，則以當前 Tick 價格填充
+                # o = h = l = c = float(tick.close)
+                # v = int(tick.volume)
 
-            # 獲取三線協定線位
-            lines = group.current_data if group.current_data else {}
-            entry_line = lines.get('entry_price', 0.0)
-            sl_line = lines.get('sl_price', 0.0)
-            tp_line = lines.get('tp_price', 0.0)
+            # # 獲取三線協定線位
+            # lines = group.current_data if group.current_data else {}
+            # entry_line = lines.get('entry_price', 0.0)
+            # sl_line = lines.get('sl_price', 0.0)
+            # tp_line = lines.get('tp_price', 0.0)
 
-            # 組合紀錄字串
-            log_fields = [
-                tick.datetime_str,          # 時間戳記
-                f"{o:.2f}", f"{h:.2f}", f"{l:.2f}", f"{c:.2f}", str(v), # OHCLV
-                f"{entry_line:.2f}",        # 策略進場線
-                f"{sl_line:.2f}",           # 策略停損線
-                f"{tp_line:.2f}",           # 策略停利線
-                str(group.position_qty),    # 倉位
-                f"{group.avg_cost:.2f}"     # 平均成本
-            ]
+            # # 組合紀錄字串
+            # log_fields = [
+                # tick.datetime_str,          # 時間戳記
+                # f"{o:.2f}", f"{h:.2f}", f"{l:.2f}", f"{c:.2f}", str(v), # OHCLV
+                # f"{entry_line:.2f}",        # 策略進場線
+                # f"{sl_line:.2f}",           # 策略停損線
+                # f"{tp_line:.2f}",           # 策略停利線
+                # str(group.position_qty),    # 倉位
+                # f"{group.avg_cost:.2f}"     # 平均成本
+            # ]
             
-            # 寫入該策略專屬日誌，標記為 DATA 類別以便過濾
-            group.log("INFO", f"DATA_SNAPSHOT|{'|'.join(log_fields)}")
+            # # 寫入該策略專屬日誌，標記為 DATA 類別以便過濾
+            # group.log("INFO", f"DATA_SNAPSHOT|{'|'.join(log_fields)}")
             
-        except Exception as e:
-            # 確保日誌紀錄失敗不會干擾主交易流程
-            pass
+        # except Exception as e:
+            # # 確保日誌紀錄失敗不會干擾主交易流程
+            # pass
 
     def _monitor_entry(self, group, tick: StandardTick, bar_open):
         entry_price = group.current_data.get('entry_price', 0)
@@ -493,7 +525,7 @@ class StrategyExecutor:
         # --- 步驟 2: 執行實體下單 ---
         # 呼叫 TradingManager 進行路由下單
         order_id = self.trading_manager.place_order(
-            group.contract_code, action, price, qty, group.account
+            group.contract_code, action, price, qty, group.account_id
         )
         
         # --- 步驟 3: 根據下單結果記錄日誌 ---
@@ -517,7 +549,8 @@ class StrategyExecutor:
         if not group.pending_order_id: return
         try: 
             # Cancel also needs routing, handled by TM parsing the ID prefix
-            TradingManager(self.adapters).cancel_order(group.pending_order_id)
+            #TradingManager(self.adapters).cancel_order(group.pending_order_id)
+            self.trading_manager.cancel_order(group.pending_order_id)
         except Exception as e: error(f"Cancel failed: {e}")
 
     # Standard management methods (start/stop/etc.) unchanged...
@@ -701,7 +734,7 @@ class StrategyExecutor:
                         
                 except Exception as e:
                     # 避免單一策略報錯導致整個執行器崩潰
-                    from shared.logging_tool import error
+                    #from shared.logging_tool import error
                     error(f"[Executor] Strategy {getattr(strategy, 'id', 'Unknown')} logic error: {e}")
 
     # 同樣確保別名函式也存在

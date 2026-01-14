@@ -186,8 +186,11 @@ class FubonAdapter(IBrokerAdapter):
                 sim_trade=False
             )
             self.cb_on_tick(std_tick)
-        except: pass
-
+        except Exception:
+            # 【關鍵修正】：不再沈默失敗
+            import traceback
+            error(f"[FubonAdapter] Quote processing error: {traceback.format_exc()}")
+            
     def download_history(self, contract_code: str, start_date: str, end_date: str) -> Any:
         return None
 
