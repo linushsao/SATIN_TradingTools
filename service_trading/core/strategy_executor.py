@@ -676,9 +676,10 @@ class StrategyExecutor:
             # 僅在系統日誌記錄錯誤
             error(f"[CSV Log Error] {group.name}: {e}")   
 
-    def _evaluate_tick(self, tick):
+    def _evaluate_tick(self, tick, data_manager=None):
         """
         [修正]: 將 self.strategies 的遍歷方式由 .items() 改為 list 直接迭代。
+        並在每筆 Tick 處理後產生 CSV 與 Log 紀錄。
         """
         if not self.strategies:
             return
@@ -690,9 +691,8 @@ class StrategyExecutor:
                 continue
             
             # 2. 檢查商品代碼是否匹配
-            # 註: 支援 contract_code 或 symbol 屬性名
             strat_symbol = getattr(strategy, 'contract_code', getattr(strategy, 'symbol', None))
-            
+            print(f"strat_symbol:{strat_symbol} | tick.code:{tick.code}")
             if strat_symbol == tick.code:
                 try:
                     # 3. 更新策略實例的最新價格快照
@@ -703,12 +703,16 @@ class StrategyExecutor:
                         strategy.on_tick(tick)
                     elif hasattr(strategy, 'update_tick'):
                         strategy.update_tick(tick)
+                    
+                    # 5. [新增] 每一筆 Tick 處理完畢後，立即寫入 CSV 紀錄
+                    if data_manager:
+                        self._record_csv_data(strategy, tick, data_manager)
+                    
+                    # 6. [新增] 同步產生策略文字日誌
+                    strategy.log("INFO", f"Tick Processed: Price={tick.close}, Vol={tick.volume}, Pos={strategy.position_qty}")
                         
                 except Exception as e:
-                    # 避免單一策略報錯導致整個執行器崩潰
-                    #from shared.logging_tool import error
                     error(f"[Executor] Strategy {getattr(strategy, 'id', 'Unknown')} logic error: {e}")
 
-    # 同樣確保別名函式也存在
     def on_tick_update(self, tick, data_manager=None):
-        self._evaluate_tick(tick)                   
+        self._evaluate_tick(tick, data_manager)                 
