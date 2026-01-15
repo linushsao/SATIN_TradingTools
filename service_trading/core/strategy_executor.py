@@ -676,24 +676,46 @@ class StrategyExecutor:
             # 僅在系統日誌記錄錯誤
             error(f"[CSV Log Error] {group.name}: {e}")   
 
+    def _is_symbol_match(self, strat_symbol, tick_code):
+        """
+        [新增] 智慧型符號比對邏輯，支援 R1/R2 通用編碼格式。
+        例如: TXFR1 應匹配 TXFA6, TMFR1 應匹配 TMFA6。
+        """
+        if not strat_symbol or not tick_code:
+            return False
+            
+        # 1. 完全相等 (如股票或已轉換的代碼)
+        if strat_symbol == tick_code:
+            return True
+            
+        # 2. 處理 R1 / R2 近月期貨編碼邏輯
+        # 判斷策略設定是否為通用編碼 (長度通常為 5，且結尾為 R1 或 R2)
+        if strat_symbol.endswith('R1') or strat_symbol.endswith('R2'):
+            prefix = strat_symbol[:-2]  # 取得字根，如 'TXF' 或 'TMF'
+            # 檢查 Tick 代碼是否以相同字根開頭，且長度符合 (字根 + 2位月份年編碼)
+            if tick_code.startswith(prefix) and len(tick_code) == (len(prefix) + 2):
+                return True
+                
+        return False
+
     def _evaluate_tick(self, tick, data_manager=None):
         """
-        [修正]: 將 self.strategies 的遍歷方式由 .items() 改為 list 直接迭代。
-        並在每筆 Tick 處理後產生 CSV 與 Log 紀錄。
+        [修正]: 
+        1. 使用 _is_symbol_match 進行模糊比對。
+        2. 確保在策略執行後立即觸發 CSV 與日誌寫入。
         """
         if not self.strategies:
             return
 
-        # 因為 self.strategies 是 list，直接遍歷物件即可
         for strategy in self.strategies:
             # 1. 檢查策略是否處於運行狀態
             if not getattr(strategy, 'is_running', False):
                 continue
             
-            # 2. 檢查商品代碼是否匹配
+            # 2. [修正] 使用智慧比對判斷商品代碼
             strat_symbol = getattr(strategy, 'contract_code', getattr(strategy, 'symbol', None))
-            print(f"strat_symbol:{strat_symbol} | tick.code:{tick.code}")
-            if strat_symbol == tick.code:
+            
+            if self._is_symbol_match(strat_symbol, tick.code):
                 try:
                     # 3. 更新策略實例的最新價格快照
                     strategy.last_price = tick.close
@@ -704,15 +726,18 @@ class StrategyExecutor:
                     elif hasattr(strategy, 'update_tick'):
                         strategy.update_tick(tick)
                     
-                    # 5. [新增] 每一筆 Tick 處理完畢後，立即寫入 CSV 紀錄
+                    # 5. [新增] 每一筆 Tick 處理完畢後，立即寫入 CSV 紀錄 (由策略處理後的結果)
                     if data_manager:
                         self._record_csv_data(strategy, tick, data_manager)
                     
-                    # 6. [新增] 同步產生策略文字日誌
-                    strategy.log("INFO", f"Tick Processed: Price={tick.close}, Vol={tick.volume}, Pos={strategy.position_qty}")
+                    # 6. [新增] 同步產生策略文字日誌，便於追蹤
+                    strategy.log("INFO", f"Tick Processed: {tick.code} @ {tick.close} | Vol: {tick.volume} | Pos: {strategy.position_qty}")
                         
                 except Exception as e:
                     error(f"[Executor] Strategy {getattr(strategy, 'id', 'Unknown')} logic error: {e}")
 
     def on_tick_update(self, tick, data_manager=None):
-        self._evaluate_tick(tick, data_manager)                 
+        """
+        [修正]: 傳遞 data_manager 以支援 KLine 數據聚合紀錄。
+        """
+        self._evaluate_tick(tick, data_manager)                
