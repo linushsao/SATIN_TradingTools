@@ -446,62 +446,40 @@ class StrategiesPlugin(ISateGuiPlugin):
             
     def _on_preview_data(self, data):
         """
-        [修正] 依據 PM 指令修正流程：
-        1. 先動態讀取左側表單參數 (Contract/Freq)。
-        2. 接著依參數 contract_code 下載 1 分 K 原始資料。
-        3. 最後執行頻率轉換並傳送至顯示工具。
+        [修正] 統一使用 HistoryDownloader 進行分段下載與重採樣。
+        1. 解決長區間下載導致的 ZMQ 逾時問題（內含 30 天分段請求邏輯）。
+        2. 支援服務降級策略，優先尋找專門的歷史數據服務節點。
+        3. 統一資料格式化與重採樣邏輯，與回測模組行為一致。
         """
-        from shared.capabilities import CAP_MARKET_DATA
-        from shared.data_transform import resample_kbar
-        import pandas as pd
+        from shared.get_historydata.downloader import HistoryDownloader
         
-        # 1. 先動態讀取左側 strategy parameters 的參數
+        # 1. 從策略表單動態讀取參數
         form_data = self.widget.config_form.get_form_data()
         code = form_data.get('contract_code')
-        # 讀取使用者設定的目標頻率 (來自 freq 欄位)
         target_freq = form_data.get('frequency', 1) 
         
         if not code:
-            self.context.log("WARNING", "[Strategies] 未設定合約代碼 (contract_code)，無法載入。")
+            self.context.log("WARNING", "[Strategies] 未設定合約代碼 (contract_code)，無法執行預覽。")
             return
 
-        svc = self.context.get_service_by_capability(CAP_MARKET_DATA)
-        if svc:
-            # 2. 接著依參數 contract_code 下載原始資料 (5-1. 預設下載 1 分 K)
-            self.context.log("INFO", f"[Strategies] 下載 {code} 的 1m 原始歷史資料...")
-            hist_list = svc.get_history_data(code, data['start'], data['end'], freq=1)
-            
-            if hist_list:
-                # 轉換為 DataFrame
-                df = pd.DataFrame(hist_list)
-                
-                # 標準化欄位名稱為首字大寫 (以符合 resample_kbar 的要求)
-                map_cols = {'open':'Open','high':'High','low':'Low','close':'Close','volume':'Volume','amount':'Amount'}
-                df.rename(columns=lambda x: map_cols.get(x.lower(), x), inplace=True)
-                
-                # 處理時間索引，確保重採樣功能運作
-                time_key = 'ts' if 'ts' in df.columns else ('timestamp' if 'timestamp' in df.columns else None)
-                if time_key:
-                    df[time_key] = pd.to_datetime(df[time_key])
-                    df.set_index(time_key, inplace=True)
-                
-                # 5-2. 依照讀取到的 freq 頻率設定轉換資料
-                if target_freq > 1:
-                    try:
-                        print(f"[DB] enter df resample")
-                        df = resample_kbar(df, target_freq)
-                        self.context.log("INFO", f"[Strategies] 資料已轉換為 {target_freq} 分 K。")
-                        print(f"[DB] left df resample")
-                    except Exception as e:
-                        self.context.log("ERROR", f"[Strategies] 頻率轉換失敗: {e}")
-                print(f"[DB] target_freq:{target_freq}, type:{type(target_freq)}")
-                print(f"[DB] df \n {df}")
-                
-                df = df.reset_index().rename(columns={df.index.name: 'Date'})
-                self.widget.load_data(df, code=code, freq=f"{target_freq}m")
-            else:
-                self.context.log("WARNING", f"[Strategies] 服務未回傳 {code} 的資料。")
-                
+        # 2. 呼叫共用下載組件 (含 30 天分段、重試、降級與標準化處理)
+        self.context.log("INFO", f"[Strategies] 開始獲取歷史資料: {code} ({data['start']} ~ {data['end']})")
+        
+        df = HistoryDownloader.fetch_and_resample(
+            context=self.context,
+            code=code,
+            start=data['start'],
+            end=data['end'],
+            target_freq=target_freq
+        )
+        
+        # 3. 處理下載結果並渲染圖表
+        if df is not None and not df.empty:
+            self.context.log("INFO", f"[Strategies] 歷史資料下載完成，總計 {len(df)} 根 K 線。")
+            self.widget.load_data(df, code, f"{target_freq}m")
+        else:
+            self.context.log("ERROR", f"[Strategies] 歷史資料獲取失敗或區間內無資料 ({code})。")               
+
     def _on_open_indicators(self):
         cfg = self.context.get_config()
         dlg = IndicatorManagerDialog(cfg, self.app_data_dir, parent=self.widget)

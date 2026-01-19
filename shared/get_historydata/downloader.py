@@ -14,17 +14,16 @@ class HistoryDownloader:
     @staticmethod
     def fetch_and_resample(context, code: str, start: str, end: str, target_freq: int, progress_callback=None):
         """
-        獲取資料並執行重採樣。
-        [修正]: 
-          1. 實作服務降級策略 (Optimization B): 優先尋找 CAP_HISTORICAL_DATA，
-             若無則降級尋找 CAP_MARKET_DATA。
-          2. 解決 15TT 導致的頻率解析崩潰問題。
+        [修正] 強化欄位識別與時間索引處理：
+        1. 支援多種時間欄位名稱 (ts, Ts, timestamp, Date) 的識別。
+        2. 強制將 OHLCV 轉換為 resample_kbar 所需的首字大寫格式。
+        3. 解決 pd.to_datetime(index) 將 RangeIndex 轉為 1970-01-01 的 Bug。
         """
-        # 延遲匯入以避免潛在的循環引用，並確保使用正確的常數
         from shared.capabilities import CAP_HISTORICAL_DATA, CAP_MARKET_DATA
+        import pandas as pd
         
         try:
-            # [Optimization B] 降級尋找策略 (Fallback Discovery)
+            # [Optimization B] 降級尋找策略
             svc = context.get_service_by_capability(CAP_HISTORICAL_DATA)
             if not svc:
                 svc = context.get_service_by_capability(CAP_MARKET_DATA)
@@ -47,6 +46,13 @@ class HistoryDownloader:
             total_chunks = len(chunks)
             all_dfs = []
             
+            # 定義欄位映射表，確保與後端 Service 回傳格式對齊
+            TIME_COLS = ['ts', 'Ts', 'timestamp', 'Timestamp', 'Date', 'date']
+            OHLCV_MAP = {
+                'o': 'Open', 'h': 'High', 'l': 'Low', 'c': 'Close', 'v': 'Volume',
+                'open': 'Open', 'high': 'High', 'low': 'Low', 'close': 'Close', 'volume': 'Volume'
+            }
+            
             # 2. 逐段下載與類型轉換
             for i, (c_start, c_end) in enumerate(chunks):
                 chunk_df = pd.DataFrame()
@@ -55,10 +61,8 @@ class HistoryDownloader:
                 
                 while retry_count < max_retries:
                     info(f"[Downloader] Chunk {i+1}/{total_chunks}: {c_start} ~ {c_end}")
-                    # 使用具備 SSTP 協議的 get_history_data 介面
                     result = svc.get_history_data(code=code, start=c_start, end=c_end, freq=1)
                     
-                    # 處理非同步同步狀態
                     if isinstance(result, str) and "Download Started" in result:
                         info(f"[Downloader] Server syncing... Retry {retry_count+1}/{max_retries}")
                         time.sleep(5)
@@ -70,11 +74,14 @@ class HistoryDownloader:
                             chunk_df = pd.DataFrame(result)
                         elif isinstance(result, pd.DataFrame):
                             chunk_df = result
-                    break
+                        break
                 
                 if not chunk_df.empty:
-                    # 標準化欄位：首字大寫化以匹配 resample_kbar 要求
-                    chunk_df.columns = [c.capitalize() for c in chunk_df.columns]
+                    # --- [修正點] 強化欄位正規化 ---
+                    # 優先處理 OHLCV 大寫化
+                    chunk_df.rename(columns=OHLCV_MAP, inplace=True)
+                    # 如果欄位名稱是首字大寫，也將其統一 (例如 Amount)
+                    chunk_df.columns = [c[0].upper() + c[1:] if len(c) > 0 else c for c in chunk_df.columns]
                     all_dfs.append(chunk_df)
                 
                 if progress_callback:
@@ -85,13 +92,19 @@ class HistoryDownloader:
                 warn(f"[Downloader] 最終未取得任何有效資料 ({code})")
                 return pd.DataFrame()
 
-            # 3. 合併、排序與清理重複值 (確保 Pandas resample 不會崩潰)
+            # 3. 合併、排序與清理重複值
             full_raw_df = pd.concat(all_dfs)
-            if 'Timestamp' in full_raw_df.columns:
-                full_raw_df['Timestamp'] = pd.to_datetime(full_raw_df['Timestamp'])
-                full_raw_df.set_index('Timestamp', inplace=True)
+            
+            # --- [修正點] 智慧時間索引識別 ---
+            time_col = next((c for c in full_raw_df.columns if c in TIME_COLS), None)
+            
+            if time_col:
+                full_raw_df[time_col] = pd.to_datetime(full_raw_df[time_col])
+                full_raw_df.set_index(time_col, inplace=True)
             elif not isinstance(full_raw_df.index, pd.DatetimeIndex):
-                full_raw_df.index = pd.to_datetime(full_raw_df.index)
+                # 如果沒有明確時間欄位且 index 不是時間，這才是真正的錯誤
+                error(f"[Downloader] 無法在回傳資料中找到時間欄位。Columns: {list(full_raw_df.columns)}")
+                return pd.DataFrame()
             
             full_raw_df.index.name = 'Date'
             full_raw_df = full_raw_df.sort_index()
@@ -100,11 +113,21 @@ class HistoryDownloader:
             # 4. 執行本地重採樣 (僅在需要大於 1m 的頻率時)
             if target_freq > 1:
                 info(f"[Downloader] Executing local resample to {target_freq}m")
-                # 這裡僅傳入整數，由 data_transform 內部的 rule = f"{freq_min}T" 處理
+                # 確保必要欄位存在，避免 resample_kbar KeyError
+                req_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+                for col in req_cols:
+                    if col not in full_raw_df.columns:
+                        full_raw_df[col] = 0.0 # 補空位防止崩潰
+                
+                if 'Amount' not in full_raw_df.columns:
+                    full_raw_df['Amount'] = full_raw_df['Close'] * full_raw_df['Volume']
+
                 return resample_kbar(full_raw_df, target_freq).dropna()
             
             return full_raw_df
 
         except Exception as e:
+            import traceback
             error(f"[Downloader] fetch_and_resample 關鍵崩潰: {str(e)}")
+            traceback.print_exc()
             return pd.DataFrame()

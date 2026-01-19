@@ -105,24 +105,7 @@
         "TE": 4000.0,
         "TF": 1000.0
     },
-    "strategy_groups": [
-        {
-            "id": 1,
-            "name": "Demo_Project",
-            "file_name": "strategy_Demo_Project.py",
-            "frequency": 15,
-            "max_order_qty": 1,
-            "max_position_qty": 1,
-            "contract_code": "TXFR1",
-            "account_id": "shioaji:1794887",
-            "max_slippage": 5,
-            "chase_buffer": 0,
-            "profit_retention_rate": 0.0,
-            "auto_restart": false,
-            "is_active": true,
-            "execution_mode": "Monitor"
-        }
-    ],
+    "strategy_groups": [],
     "system_settings": {
         "timezone": {
             "mode": "MANUAL",

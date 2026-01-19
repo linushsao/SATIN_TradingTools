@@ -1,6 +1,6 @@
 {
     "1": {
-        "is_running": true,
+        "is_running": false,
         "position_qty": 0,
         "avg_cost": 0.0,
         "trailing_active": false,
