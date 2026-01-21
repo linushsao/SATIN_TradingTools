@@ -23,7 +23,8 @@
     ],
     "live_independent_plots": [
         "volume_plot.py",
-        "subchart_rsi_stdev.py"
+        "subchart_rsi_stdev.py",
+        "subchart_stdw_stdev.py"
     ],
     "backtest_k_bar_plugins": [
         "view.py"
@@ -41,7 +42,7 @@
     ],
     "last_strategy_source": null,
     "last_strategy_path": null,
-    "last_futures_contract": "TXFR1",
+    "last_futures_contract": "TMFR1",
     "auto_login": true,
     "last_login_mode": "2",
     "logging": {
@@ -69,7 +70,7 @@
     },
     "view_kbar_freq": 15,
     "show_hud": true,
-    "show_crosshair": false,
+    "show_crosshair": true,
     "external_editor_path": "C:/Program Files/Notepad++/notepad++.exe",
     "external_editor_args": "",
     "strategies_excluded_files": [
@@ -93,5 +94,14 @@
         "schema_cache.json",
         ".gitignore",
         "internal.db"
-    ]
+    ],
+    "contract_multipliers": {
+        "TXF": 200.0,
+        "MTX": 50.0,
+        "TMF": 10.0,
+        "MXF": 50.0,
+        "GTF": 50.0,
+        "TE": 4000.0,
+        "TF": 1000.0
+    }
 }

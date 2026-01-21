@@ -44,9 +44,13 @@ class TickAggregator:
     def _start_new_bar(self, timestamp: pd.Timestamp, price, volume, amount):
         new_timestamp = timestamp.floor(f'{self.base_freq}min')
         
-        # Session Reset Logic (08:45:00) - Assuming TPE Time Logic applies
-        if timestamp.hour == 8 and timestamp.minute >= 45 and new_timestamp.minute < 45:
-            new_timestamp = new_timestamp.replace(minute=45)
+        # [修正]: 強化 TXF 08:45 開盤點 Snap 邏輯
+        # 確保在開盤首個週期內 (08:45 ~ 08:45+Freq) 的 Tick 標籤絕對等於 08:45
+        session_start = timestamp.replace(hour=8, minute=45, second=0, microsecond=0)
+        session_first_interval_end = session_start + pd.Timedelta(minutes=self.base_freq)
+        
+        if session_start <= timestamp < session_first_interval_end:
+            new_timestamp = session_start
 
         self.current_bar = {
             'Open': price, 'High': price, 'Low': price, 'Close': price,
@@ -82,10 +86,13 @@ class TickAggregator:
         amount = tick.amount
         
         bar_time = timestamp.floor(f'{self.base_freq}min')
+        
+        # [修正]: 修正邊界判定邏輯，確保 session_open_boundary 與當前 Tick 日期同步
         session_open_boundary = timestamp.replace(hour=8, minute=45, second=0, microsecond=0)
         
         is_session_cross = False
         if self.current_bar:
+            # 判斷是否跨越了 08:45 開盤線 (從夜盤 05:00 結束後到日盤開盤的跨越)
             if self.current_bar['timestamp'] < session_open_boundary and timestamp >= session_open_boundary:
                 is_session_cross = True
 
@@ -98,9 +105,10 @@ class TickAggregator:
             self._close_current_bar()
             self._start_new_bar(timestamp, price, volume, amount)
         else:
+            # 更新現有 K 棒
             self.current_bar['High'] = max(self.current_bar['High'], price)
             self.current_bar['Low'] = min(self.current_bar['Low'], price)
-            self.current_bar['Close'] = price 
+            self.current_bar['Close'] = price
             self.current_bar['Volume'] += volume
             self.current_bar['Amount'] += amount
 
